@@ -1,0 +1,24 @@
+{
+  "workspaces": [
+    {
+      "name": "my-dotnet-app",
+      "type": "dotnet",
+      "solution": "C:/path/to/MyApp.sln",
+      "cleanArchitecture": {
+        "coreProject": "MyApp.Core",
+        "infraProject": "MyApp.Infrastructure",
+        "webProject": "MyApp"
+      }
+    },
+    {
+      "name": "my-powershell-modules",
+      "type": "powershell",
+      "rootPath": "C:/path/to/PowerShellModules"
+    },
+    {
+      "name": "my-classic-asp-app",
+      "type": "asp-classic",
+      "rootPath": "C:/path/to/ClassicAspApp"
+    }
+  ]
+}
