@@ -18,6 +18,8 @@ public sealed class PowerShellIndex
         _rootPath = rootPath;
     }
 
+    public int FileCount => _files.Count;
+
     public static PowerShellIndex Build(string rootPath, Action<string>? log = null)
     {
         var files = new Dictionary<string, PowerShellFileInfo>(StringComparer.OrdinalIgnoreCase);

@@ -31,6 +31,8 @@ public sealed class AspIndex
         _rootPath = rootPath;
     }
 
+    public int FileCount => _files.Count;
+
     public static AspIndex Build(string rootPath, Action<string>? log = null)
     {
         var files = new Dictionary<string, AspFileInfo>(StringComparer.OrdinalIgnoreCase);

@@ -27,7 +27,8 @@
       "Bash(dotnet tool:*)",
       "Bash(cat /c/Users/yve/AppData/Local/claude-cli-nodejs/Cache/C--Git-CodeIntelligenceMcp/mcp-logs-code-intelligence/*.log)",
       "Bash(ilspycmd:*)",
-      "Bash(cat /c/Users/yve/AppData/Local/claude-cli-nodejs/Cache/C--Git-CodeIntelligenceMcp/mcp-logs-sql-schema/*.log)"
+      "Bash(cat /c/Users/yve/AppData/Local/claude-cli-nodejs/Cache/C--Git-CodeIntelligenceMcp/mcp-logs-sql-schema/*.log)",
+      "Bash(ls:*)"
     ]
   }
 }

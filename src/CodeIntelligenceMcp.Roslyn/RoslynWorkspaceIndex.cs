@@ -38,6 +38,8 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         _typeBySimpleName = typeBySimpleName;
     }
 
+    public int TypeCount => _allTypes.Count;
+
     // Creates an index from in-memory compilations for unit testing.
     // GetProjectDocuments, GetRazorDocuments, and FindUsagesAsync are not available in this mode.
     internal static RoslynWorkspaceIndex CreateForTesting(
