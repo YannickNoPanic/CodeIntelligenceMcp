@@ -1,0 +1,25 @@
+﻿using System.Globalization;
+
+namespace VBScript.Parser.Ast
+{
+    public readonly struct Range(int start, int end) : IEquatable<Range>
+    {
+        public readonly int Start = start;
+        public readonly int End = end;
+
+        public bool Equals(Range other) =>
+            Start == other.Start && End == other.End;
+
+        public override bool Equals(object? obj) =>
+            obj is Range other && Equals(other);
+
+        public override int GetHashCode() =>
+            unchecked((Start * 397) ^ End);
+
+        public override string ToString() =>
+            String.Format(CultureInfo.InvariantCulture, "[{0}..{1})", Start, End);
+
+        public static bool operator ==(Range left, Range right) => left.Equals(right);
+        public static bool operator !=(Range left, Range right) => !left.Equals(right);
+    }
+}

@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /c/Git/CodeIntelligenceMcp/src/CodeIntelligenceMcp/Tools)",
+      "Bash(mkdir -p /c/Git/CodeIntelligenceMcp/src/CodeIntelligenceMcp.Roslyn/Models)",
+      "Bash(mkdir -p /c/Git/CodeIntelligenceMcp/src/CodeIntelligenceMcp.AspClassic/Models)",
+      "Bash(mkdir -p /c/Git/CodeIntelligenceMcp/src/VBScript.Parser)",
+      "Bash(mkdir -p /c/Git/CodeIntelligenceMcp/tests/CodeIntelligenceMcp.Tests)",
+      "Bash(cp -r /c/Git/CodeIntelligenceMcp/vbscript-parser/VBScript.Parser/. /c/Git/CodeIntelligenceMcp/src/VBScript.Parser/)",
+      "Bash(echo \"Copied $\\(find /c/Git/CodeIntelligenceMcp/src/VBScript.Parser -name \"*.cs\")",
+      "Bash(dotnet new sln:*)",
+      "Bash(dotnet build:*)",
+      "Bash(ls /c/Git/CodeIntelligenceMcp/*.sln)",
+      "Bash(ls /c/Git/CodeIntelligenceMcp/**/*.sln)",
+      "Bash(dotnet test:*)",
+      "Bash(dotnet script:*)",
+      "Bash(dotnet-csc /tmp/test_desc.cs)",
+      "Bash(dotnet list:*)",
+      "Bash(claude mcp:*)",
+      "Bash(curl -v http://localhost:5100/sse)",
+      "Bash(curl -v http://localhost:5101/sse)",
+      "Bash(curl -s http://localhost:5100/)",
+      "Bash(curl -s http://localhost:5100/mcp)",
+      "Bash(curl -s http://localhost:5101/)",
+      "Read(//c/Git/SqlSchemaMcp/**)",
+      "Read(//c/Git/**)",
+      "Bash(dotnet tool:*)",
+      "Bash(cat /c/Users/yve/AppData/Local/claude-cli-nodejs/Cache/C--Git-CodeIntelligenceMcp/mcp-logs-code-intelligence/*.log)",
+      "Bash(ilspycmd:*)",
+      "Bash(cat /c/Users/yve/AppData/Local/claude-cli-nodejs/Cache/C--Git-CodeIntelligenceMcp/mcp-logs-sql-schema/*.log)"
+    ]
+  }
+}

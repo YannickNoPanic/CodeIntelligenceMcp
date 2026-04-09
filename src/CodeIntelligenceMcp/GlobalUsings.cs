@@ -1,0 +1,12 @@
+global using System.ComponentModel;
+global using System.Text.Json;
+global using System.Text.Json.Serialization;
+global using CodeIntelligenceMcp.AspClassic;
+global using CodeIntelligenceMcp.AspClassic.Models;
+global using CodeIntelligenceMcp.PowerShell;
+global using CodeIntelligenceMcp.PowerShell.Models;
+global using CodeIntelligenceMcp.Roslyn;
+global using CodeIntelligenceMcp.Roslyn.Models;
+global using Microsoft.CodeAnalysis.CSharp;
+global using Microsoft.CodeAnalysis.CSharp.Syntax;
+global using ModelContextProtocol.Server;

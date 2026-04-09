@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\VBScript.Parser\VBScript.Parser.csproj" />
+  </ItemGroup>
+
+</Project>

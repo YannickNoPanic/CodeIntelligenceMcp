@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CodeIntelligenceMcp.AspClassic/CodeIntelligenceMcp.AspClassic.csproj" />
+    <Project Path="src/CodeIntelligenceMcp.PowerShell/CodeIntelligenceMcp.PowerShell.csproj" />
+    <Project Path="src/CodeIntelligenceMcp.Roslyn/CodeIntelligenceMcp.Roslyn.csproj" />
+    <Project Path="src/CodeIntelligenceMcp/CodeIntelligenceMcp.csproj" />
+    <Project Path="src/VBScript.Parser/VBScript.Parser.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CodeIntelligenceMcp.Tests/CodeIntelligenceMcp.Tests.csproj" />
+  </Folder>
+</Solution>

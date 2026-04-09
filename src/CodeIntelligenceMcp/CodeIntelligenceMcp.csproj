@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.1.0" />
+    <PackageReference Include="System.ComponentModel.Annotations" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Build.Framework" Version="17.11.48" ExcludeAssets="runtime" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CodeIntelligenceMcp.Roslyn\CodeIntelligenceMcp.Roslyn.csproj" />
+    <ProjectReference Include="..\CodeIntelligenceMcp.AspClassic\CodeIntelligenceMcp.AspClassic.csproj" />
+    <ProjectReference Include="..\CodeIntelligenceMcp.PowerShell\CodeIntelligenceMcp.PowerShell.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\mcp-config.json" Link="mcp-config.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>
