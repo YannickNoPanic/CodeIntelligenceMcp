@@ -10,6 +10,8 @@ McpConfig config = McpConfigLoader.Load(configPath);
 var roslynIndexes = new Dictionary<string, RoslynWorkspaceIndex>();
 var aspIndexes = new Dictionary<string, AspIndex>();
 var psIndexes = new Dictionary<string, PowerShellIndex>();
+var pyIndexes = new Dictionary<string, PythonIndex>();
+var jsIndexes = new Dictionary<string, JsIndex>();
 var cleanArchConfig = new Dictionary<string, CleanArchitectureNames>();
 var solutionPaths = new Dictionary<string, string>();
 
@@ -74,6 +76,38 @@ foreach (WorkspaceConfig ws in config.Workspaces)
             Console.Error.WriteLine($"[warn] Failed to load powershell workspace '{ws.Name}': {ex.Message}");
         }
     }
+    else if (ws.Type == "python" && ws.RootPath is not null)
+    {
+        try
+        {
+            Console.Error.WriteLine($"[info] Loading python workspace '{ws.Name}'...");
+            var sw = Stopwatch.StartNew();
+            PythonIndex index = PythonIndex.Build(ws.RootPath, msg => Console.Error.WriteLine(msg));
+            sw.Stop();
+            pyIndexes[ws.Name] = index;
+            Console.Error.WriteLine($"[info] Workspace '{ws.Name}' loaded — {index.FileCount} files in {sw.Elapsed.TotalSeconds:F1}s");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[warn] Failed to load python workspace '{ws.Name}': {ex.Message}");
+        }
+    }
+    else if (ws.Type == "javascript" && ws.RootPath is not null)
+    {
+        try
+        {
+            Console.Error.WriteLine($"[info] Loading javascript workspace '{ws.Name}'...");
+            var sw = Stopwatch.StartNew();
+            JsIndex index = JsIndex.Build(ws.RootPath, msg => Console.Error.WriteLine(msg));
+            sw.Stop();
+            jsIndexes[ws.Name] = index;
+            Console.Error.WriteLine($"[info] Workspace '{ws.Name}' loaded — {index.FileCount} files in {sw.Elapsed.TotalSeconds:F1}s");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[warn] Failed to load javascript workspace '{ws.Name}': {ex.Message}");
+        }
+    }
 }
 
 totalStopwatch.Stop();
@@ -91,6 +125,8 @@ if (useSse)
     builder.Services.AddSingleton(new RoslynIndexRegistry(roslynIndexes));
     builder.Services.AddSingleton(new AspIndexRegistry(aspIndexes));
     builder.Services.AddSingleton(new PowerShellIndexRegistry(psIndexes));
+    builder.Services.AddSingleton(new PythonIndexRegistry(pyIndexes));
+    builder.Services.AddSingleton(new JsIndexRegistry(jsIndexes));
     builder.Services.AddSingleton(new CleanArchRegistry(cleanArchConfig));
     builder.Services.AddSingleton(new SolutionPathRegistry(solutionPaths));
 
@@ -101,7 +137,9 @@ if (useSse)
         .WithTools<AspClassicTools>()
         .WithTools<SqlTools>()
         .WithTools<CodebaseWikiTool>()
-        .WithTools<PowerShellTools>();
+        .WithTools<PowerShellTools>()
+        .WithTools<PythonTools>()
+        .WithTools<JsTools>();
 
     var app = builder.Build();
 
@@ -170,6 +208,8 @@ else
     builder.Services.AddSingleton(new RoslynIndexRegistry(roslynIndexes));
     builder.Services.AddSingleton(new AspIndexRegistry(aspIndexes));
     builder.Services.AddSingleton(new PowerShellIndexRegistry(psIndexes));
+    builder.Services.AddSingleton(new PythonIndexRegistry(pyIndexes));
+    builder.Services.AddSingleton(new JsIndexRegistry(jsIndexes));
     builder.Services.AddSingleton(new CleanArchRegistry(cleanArchConfig));
     builder.Services.AddSingleton(new SolutionPathRegistry(solutionPaths));
 
@@ -180,7 +220,9 @@ else
         .WithTools<AspClassicTools>()
         .WithTools<SqlTools>()
         .WithTools<CodebaseWikiTool>()
-        .WithTools<PowerShellTools>();
+        .WithTools<PowerShellTools>()
+        .WithTools<PythonTools>()
+        .WithTools<JsTools>();
 
     Console.Error.WriteLine("[CodeIntelligenceMcp] Stdio mode");
 
