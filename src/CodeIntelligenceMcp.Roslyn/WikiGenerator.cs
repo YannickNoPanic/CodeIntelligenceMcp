@@ -5,7 +5,13 @@ namespace CodeIntelligenceMcp.Roslyn;
 
 public sealed class WikiGenerator(RoslynWorkspaceIndex index)
 {
-    public string Generate(string? focusArea = null, bool includePatterns = true, bool includeMetrics = false)
+    public string Generate(
+        string? focusArea = null,
+        bool includePatterns = true,
+        bool includeMetrics = false,
+        bool includeViolations = true,
+        bool includeDiagnostics = true,
+        CleanArchitectureNames? cleanArch = null)
     {
         IReadOnlyList<TypeSummary> allTypes = index.FindTypes(@namespace: focusArea);
         ProjectDependency projectDep = index.GetProjectDependencies();
@@ -26,6 +32,9 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
 
         if (includePatterns)
             AppendPatterns(sb, focusArea);
+
+        if (includeViolations && cleanArch is not null)
+            AppendHealthSummary(sb, cleanArch, focusArea);
 
         if (includeMetrics)
             AppendMetrics(sb, allTypes, projectDep);
@@ -151,6 +160,44 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
             sb.AppendLine($"**Vertical Slices**: {domains.Count} feature domain{(domains.Count == 1 ? "" : "s")}");
             foreach (string domain in domains.Take(15))
                 sb.AppendLine($"  - {domain}");
+            sb.AppendLine();
+        }
+    }
+
+    private void AppendHealthSummary(StringBuilder sb, CleanArchitectureNames cleanArch, string? focusArea)
+    {
+        sb.AppendLine("## Health Summary");
+        sb.AppendLine();
+
+        ViolationDetector detector = new(index, cleanArch);
+        string[] allRules =
+        [
+            "core-no-ef", "core-no-http", "core-no-azure",
+            "usecase-not-sealed",
+            "inline-viewmodel-razor", "business-logic-in-razor", "json-parsing-in-view",
+            "controller-not-thin", "dto-in-core"
+        ];
+
+        bool anyViolation = false;
+        foreach (string rule in allRules)
+        {
+            IReadOnlyList<ViolationResult> violations = detector.Detect(rule);
+            if (!string.IsNullOrEmpty(focusArea))
+                violations = [.. violations.Where(v => v.FilePath.Contains(focusArea, StringComparison.OrdinalIgnoreCase))];
+
+            if (violations.Count == 0)
+                continue;
+
+            anyViolation = true;
+            sb.AppendLine($"**{rule}**: {violations.Count} violation{(violations.Count == 1 ? "" : "s")}");
+            foreach (ViolationResult v in violations.Take(3))
+                sb.AppendLine($"  - {Path.GetFileName(v.FilePath)}:{v.LineNumber} — {v.Description}");
+            sb.AppendLine();
+        }
+
+        if (!anyViolation)
+        {
+            sb.AppendLine("No architectural violations detected.");
             sb.AppendLine();
         }
     }

@@ -63,6 +63,9 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
             if (document.FilePath is null)
                 continue;
 
+            if (document.FilePath.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase))
+                continue;
+
             SyntaxNode? root = document.GetSyntaxRootAsync().GetAwaiter().GetResult();
             if (root is null)
                 continue;
@@ -303,6 +306,9 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         foreach (Document document in index.GetProjectDocuments(cleanArch.CoreProject))
         {
             if (document.FilePath is null)
+                continue;
+
+            if (document.FilePath.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase))
                 continue;
 
             SyntaxNode? root = document.GetSyntaxRootAsync().GetAwaiter().GetResult();

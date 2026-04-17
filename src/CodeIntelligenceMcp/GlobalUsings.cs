@@ -11,6 +11,7 @@ global using CodeIntelligenceMcp.Python;
 global using CodeIntelligenceMcp.Python.Models;
 global using CodeIntelligenceMcp.Roslyn;
 global using CodeIntelligenceMcp.Roslyn.Models;
+global using CodeIntelligenceMcp.Workspaces;
 global using Microsoft.CodeAnalysis.CSharp;
 global using Microsoft.CodeAnalysis.CSharp.Syntax;
 global using ModelContextProtocol.Server;

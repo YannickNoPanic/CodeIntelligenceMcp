@@ -39,6 +39,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
     }
 
     public int TypeCount => _allTypes.Count;
+    public CleanArchitectureNames CleanArchitecture => _cleanArch;
 
     // Creates an index from in-memory compilations for unit testing.
     // GetProjectDocuments, GetRazorDocuments, and FindUsagesAsync are not available in this mode.
@@ -89,7 +90,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
             if (compilation is null)
                 continue;
 
-            foreach (INamedTypeSymbol type in GetAllTypes(compilation.GlobalNamespace))
+            foreach (INamedTypeSymbol type in GetAllTypes(compilation.Assembly.GlobalNamespace))
             {
                 Location? location = type.Locations.FirstOrDefault(l => l.IsInSource);
 
@@ -118,7 +119,36 @@ public sealed class RoslynWorkspaceIndex : IDisposable
             t => t.Symbol.Name,
             StringComparer.OrdinalIgnoreCase);
 
-        return new RoslynWorkspaceIndex(workspace, solution, cleanArch, allTypes, typeByFqn, typeBySimpleName);
+        CleanArchitectureNames effectiveCleanArch =
+            string.IsNullOrEmpty(cleanArch.CoreProject)
+                ? AutoDetectCleanArchitecture(solution)
+                : cleanArch;
+
+        return new RoslynWorkspaceIndex(workspace, solution, effectiveCleanArch, allTypes, typeByFqn, typeBySimpleName);
+    }
+
+    private static CleanArchitectureNames AutoDetectCleanArchitecture(Solution solution)
+    {
+        IReadOnlyList<string> names = solution.Projects
+            .Where(p => !p.Name.Contains("Test", StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.Name)
+            .ToList();
+
+        string core = names.FirstOrDefault(n =>
+            n.EndsWith(".Core", StringComparison.OrdinalIgnoreCase)) ?? string.Empty;
+
+        string infra = names.FirstOrDefault(n =>
+            n.EndsWith(".Infrastructure", StringComparison.OrdinalIgnoreCase)
+            || n.EndsWith(".Infra", StringComparison.OrdinalIgnoreCase)
+            || n.EndsWith(".Data", StringComparison.OrdinalIgnoreCase)
+            || n.EndsWith(".Persistence", StringComparison.OrdinalIgnoreCase)) ?? string.Empty;
+
+        string web = names.FirstOrDefault(n =>
+            n.EndsWith(".Api", StringComparison.OrdinalIgnoreCase)
+            || n.EndsWith(".Web", StringComparison.OrdinalIgnoreCase)
+            || n.EndsWith(".Mvc", StringComparison.OrdinalIgnoreCase)) ?? string.Empty;
+
+        return new CleanArchitectureNames(core, infra, web);
     }
 
     private static IEnumerable<INamedTypeSymbol> GetAllTypes(INamespaceSymbol ns)
@@ -611,6 +641,87 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         Accessibility.ProtectedAndInternal => "private protected",
         _ => "public"
     };
+
+    public async Task<IReadOnlyList<DiagnosticResult>> GetCompilerDiagnosticsAsync(
+        string? projectFilter = null,
+        string? minSeverity = null,
+        string? category = null,
+        CancellationToken ct = default)
+    {
+        if (_solution is null)
+            return [];
+
+        DiagnosticSeverity threshold = minSeverity?.ToLowerInvariant() switch
+        {
+            "error" => DiagnosticSeverity.Error,
+            "info" => DiagnosticSeverity.Info,
+            _ => DiagnosticSeverity.Warning
+        };
+
+        List<DiagnosticResult> results = [];
+
+        IEnumerable<Project> projects = _solution.Projects;
+        if (!string.IsNullOrEmpty(projectFilter))
+            projects = projects.Where(p => string.Equals(p.Name, projectFilter, StringComparison.OrdinalIgnoreCase));
+
+        foreach (Project project in projects)
+        {
+            Compilation? compilation = await project.GetCompilationAsync(ct);
+            if (compilation is null)
+                continue;
+
+            foreach (Diagnostic diagnostic in compilation.GetDiagnostics(ct))
+            {
+                if (diagnostic.Severity < threshold)
+                    continue;
+
+                string id = diagnostic.Id;
+                if (!string.IsNullOrEmpty(category)
+                    && !id.StartsWith(category, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string severityLabel = diagnostic.Severity switch
+                {
+                    DiagnosticSeverity.Error => "error",
+                    DiagnosticSeverity.Warning => "warning",
+                    DiagnosticSeverity.Info => "info",
+                    _ => "hidden"
+                };
+
+                string derivedCategory = id.Length >= 2
+                    ? new string(id.TakeWhile(char.IsLetter).ToArray())
+                    : id;
+
+                FileLinePositionSpan span = diagnostic.Location.GetLineSpan();
+                string filePath = span.Path ?? string.Empty;
+                int lineNumber = span.IsValid ? span.StartLinePosition.Line + 1 : 0;
+
+                results.Add(new DiagnosticResult(
+                    id,
+                    severityLabel,
+                    diagnostic.GetMessage(),
+                    filePath,
+                    lineNumber,
+                    project.Name,
+                    derivedCategory));
+            }
+        }
+
+        return results;
+    }
+
+    public IReadOnlyList<TypeSummary> GetTypesInFile(string filePath)
+    {
+        string normalized = filePath.Replace('\\', '/');
+        return [.. _allTypes
+            .Where(t => t.FilePath.Replace('\\', '/').Equals(normalized, StringComparison.OrdinalIgnoreCase))
+            .Select(t => new TypeSummary(
+                t.Symbol.Name,
+                t.Symbol.ContainingNamespace?.ToDisplayString() ?? string.Empty,
+                t.FilePath,
+                t.LineStart,
+                GetKind(t.Symbol)))];
+    }
 
     public void Dispose() => _workspace?.Dispose();
 }

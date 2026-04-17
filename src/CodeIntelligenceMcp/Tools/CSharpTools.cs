@@ -2,7 +2,7 @@ namespace CodeIntelligenceMcp.Tools;
 
 [McpServerToolType]
 public sealed class CSharpTools(
-    RoslynIndexRegistry indexes,
+    IWorkspaceProvider<RoslynWorkspaceIndex> roslynProvider,
     CleanArchRegistry cleanArch,
     SolutionPathRegistry solutionPaths)
 {
@@ -11,13 +11,22 @@ public sealed class CSharpTools(
     private static string Ok(object result) => JsonSerializer.Serialize(result, JsonOptions);
     private static string Err(string message) => JsonSerializer.Serialize(new { error = message });
 
-    [McpServerTool(Name = "get_type")]
-    public string GetType(
-        [Description("Workspace name")] string workspace,
-        [Description("Simple or fully qualified type name")] string typeName)
+    private CleanArchitectureNames ResolveCleanArch(string workspace, RoslynWorkspaceIndex index)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out RoslynWorkspaceIndex? index))
-            return Err("workspace not found");
+        CleanArchitectureNames configured = cleanArch.Config.GetValueOrDefault(workspace, new CleanArchitectureNames("", "", ""));
+        return string.IsNullOrEmpty(configured.CoreProject) ? index.CleanArchitecture : configured;
+    }
+
+    [McpServerTool(Name = "get_type")]
+    [Description("Get full structural details of a type: properties, methods, base type, interfaces. Use when you know the type name and need its members.")]
+    public async Task<string> GetType(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        [Description("Simple or fully qualified type name")] string typeName,
+        CancellationToken ct = default)
+    {
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
 
         TypeInfo? typeInfo = index.GetType(typeName);
         if (typeInfo is null)
@@ -27,29 +36,35 @@ public sealed class CSharpTools(
     }
 
     [McpServerTool(Name = "find_types")]
-    public string FindTypes(
-        [Description("Workspace name")] string workspace,
+    [Description("Search for types by name, namespace, interface, attribute, or kind. Use to discover what exists in a domain without reading files.")]
+    public async Task<string> FindTypes(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
         [Description("Substring match on type name (case-insensitive)")] string? nameContains = null,
         [Description("Exact or prefix namespace match")] string? @namespace = null,
         [Description("Interface name the type must implement")] string? implementsInterface = null,
         [Description("Attribute name the type must have")] string? hasAttribute = null,
-        [Description("Type kind: class, interface, record, or enum")] string? kind = null)
+        [Description("Type kind: class, interface, record, or enum")] string? kind = null,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out RoslynWorkspaceIndex? index))
-            return Err("workspace not found");
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
 
         IReadOnlyList<TypeSummary> results = index.FindTypes(nameContains, @namespace, implementsInterface, hasAttribute, kind);
         return Ok(results);
     }
 
     [McpServerTool(Name = "get_method")]
-    public string GetMethod(
-        [Description("Workspace name")] string workspace,
+    [Description("Get the full source body of a specific method. Use when you need to read method logic without opening the file.")]
+    public async Task<string> GetMethod(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
         [Description("Type name")] string typeName,
-        [Description("Method name")] string methodName)
+        [Description("Method name")] string methodName,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out RoslynWorkspaceIndex? index))
-            return Err("workspace not found");
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
 
         MethodInfo? methodInfo = index.GetMethod(typeName, methodName);
         if (methodInfo is null)
@@ -59,37 +74,45 @@ public sealed class CSharpTools(
     }
 
     [McpServerTool(Name = "find_implementations")]
-    public string FindImplementations(
-        [Description("Workspace name")] string workspace,
-        [Description("Interface name")] string interfaceName)
+    [Description("Find all concrete types that implement a given interface. Use to map interfaces to their implementations.")]
+    public async Task<string> FindImplementations(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        [Description("Interface name")] string interfaceName,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out RoslynWorkspaceIndex? index))
-            return Err("workspace not found");
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
 
         IReadOnlyList<ImplementationSummary> results = index.FindImplementations(interfaceName);
         return Ok(results);
     }
 
     [McpServerTool(Name = "find_usages")]
+    [Description("Find all usages of a type, method, or field across the workspace. Use to understand impact before refactoring.")]
     public async Task<string> FindUsages(
-        [Description("Workspace name")] string workspace,
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
         [Description("Symbol name to find usages of")] string symbolName,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out RoslynWorkspaceIndex? index))
-            return Err("workspace not found");
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
 
-        IReadOnlyList<UsageResult> results = await index.FindUsagesAsync(symbolName, cancellationToken);
+        IReadOnlyList<UsageResult> results = await index.FindUsagesAsync(symbolName, ct);
         return Ok(results);
     }
 
     [McpServerTool(Name = "get_dependencies")]
-    public string GetDependencies(
-        [Description("Workspace name")] string workspace,
-        [Description("Type name")] string typeName)
+    [Description("Get the constructor-injected dependencies of a type. Use to understand what a class depends on without reading its file.")]
+    public async Task<string> GetDependencies(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        [Description("Type name")] string typeName,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out RoslynWorkspaceIndex? index))
-            return Err("workspace not found");
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
 
         DependencyInfo? depInfo = index.GetDependencies(typeName);
         if (depInfo is null)
@@ -99,62 +122,77 @@ public sealed class CSharpTools(
     }
 
     [McpServerTool(Name = "get_public_surface")]
-    public string GetPublicSurface(
-        [Description("Workspace name")] string workspace,
-        [Description("Namespace to inspect (exact or prefix)")] string @namespace)
+    [Description("List all public types in a namespace: interfaces, classes, records, enums. Use to understand what a layer exposes.")]
+    public async Task<string> GetPublicSurface(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        [Description("Namespace to inspect (exact or prefix)")] string @namespace,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out RoslynWorkspaceIndex? index))
-            return Err("workspace not found");
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
 
         PublicSurface surface = index.GetPublicSurface(@namespace);
         return Ok(surface);
     }
 
     [McpServerTool(Name = "get_project_dependencies")]
-    public string GetProjectDependencies(
-        [Description("Workspace name")] string workspace)
+    [Description("Get the project dependency graph: which projects reference which. Use to verify Clean Architecture layering.")]
+    public async Task<string> GetProjectDependencies(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out RoslynWorkspaceIndex? index))
-            return Err("workspace not found");
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
 
         ProjectDependency dep = index.GetProjectDependencies();
         return Ok(dep);
     }
 
     [McpServerTool(Name = "search_symbol")]
-    public string SearchSymbol(
-        [Description("Workspace name")] string workspace,
-        [Description("Substring query (case-insensitive)")] string query)
+    [Description("Search symbols (types, methods, properties) by substring. Use when you know part of a name but not the full path.")]
+    public async Task<string> SearchSymbol(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        [Description("Substring query (case-insensitive)")] string query,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out RoslynWorkspaceIndex? index))
-            return Err("workspace not found");
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
 
         IReadOnlyList<SymbolSearchResult> results = index.SearchSymbol(query);
         return Ok(results);
     }
 
     [McpServerTool(Name = "scan_patterns")]
-    public string ScanPatterns(
-        [Description("Workspace name")] string workspace)
+    [Description("Count types, interfaces, use cases, and razor components, and run all violation rules. Use as a quick structural health check.")]
+    public async Task<string> ScanPatterns(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out RoslynWorkspaceIndex? index))
-            return Err("workspace not found");
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
 
-        CleanArchitectureNames ca = cleanArch.Config.GetValueOrDefault(workspace, new CleanArchitectureNames("", "", ""));
+        CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
         PatternScanner scanner = new(index, ca);
         PatternSummary summary = scanner.Scan();
         return Ok(summary);
     }
 
     [McpServerTool(Name = "find_violations")]
-    public string FindViolations(
-        [Description("Workspace name")] string workspace,
-        [Description("Rule key: core-no-ef, core-no-http, core-no-azure, usecase-not-sealed, inline-viewmodel-razor, business-logic-in-razor, json-parsing-in-view, controller-not-thin, dto-in-core")] string rule)
+    [Description("Run a specific architectural rule across the workspace. Rules: core-no-ef, core-no-http, core-no-azure, usecase-not-sealed, inline-viewmodel-razor, business-logic-in-razor, json-parsing-in-view, controller-not-thin, dto-in-core.")]
+    public async Task<string> FindViolations(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        [Description("Rule key: core-no-ef, core-no-http, core-no-azure, usecase-not-sealed, inline-viewmodel-razor, business-logic-in-razor, json-parsing-in-view, controller-not-thin, dto-in-core")] string rule,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out RoslynWorkspaceIndex? index))
-            return Err("workspace not found");
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
 
-        CleanArchitectureNames ca = cleanArch.Config.GetValueOrDefault(workspace, new CleanArchitectureNames("", "", ""));
+        CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
         ViolationDetector detector = new(index, ca);
 
         try
@@ -169,12 +207,15 @@ public sealed class CSharpTools(
     }
 
     [McpServerTool(Name = "analyze_file")]
-    public string AnalyzeFile(
-        [Description("Workspace name")] string workspace,
-        [Description("File path (relative to solution root or absolute)")] string filePath)
+    [Description("Analyze a single .cs or .razor file for structural observations: missing CancellationToken, layer violations, inline types, JSON in view. Use when you need file-level detail after scan_patterns signals an issue.")]
+    public async Task<string> AnalyzeFile(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        [Description("File path (relative to solution root or absolute)")] string filePath,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out RoslynWorkspaceIndex? index))
-            return Err("workspace not found");
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
 
         string solutionPath = solutionPaths.Paths.GetValueOrDefault(workspace, "");
         string solutionDir = Path.GetDirectoryName(solutionPath) ?? "";
@@ -313,7 +354,7 @@ public sealed class CSharpTools(
                 }
             }
 
-            CleanArchitectureNames ca = cleanArch.Config.GetValueOrDefault(workspace, new CleanArchitectureNames("", "", ""));
+            CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
 
             if (!string.IsNullOrEmpty(ca.CoreProject))
             {

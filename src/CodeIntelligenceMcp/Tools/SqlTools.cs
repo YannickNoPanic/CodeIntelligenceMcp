@@ -1,31 +1,22 @@
 namespace CodeIntelligenceMcp.Tools;
 
 [McpServerToolType]
-public sealed class SqlTools(AspIndexRegistry aspIndexes)
+public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider)
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     private static string Ok(object result) => JsonSerializer.Serialize(result, JsonOptions);
     private static string Err(string message) => JsonSerializer.Serialize(new { error = message });
 
-    private bool TryGetAspIndex(string workspace, out AspIndex index)
-    {
-        if (aspIndexes.Indexes.TryGetValue(workspace, out AspIndex? found))
-        {
-            index = found;
-            return true;
-        }
-
-        index = null!;
-        return false;
-    }
-
     [McpServerTool(Name = "sql_find_table")]
-    public string SqlFindTable(
+    [Description("Find all SQL queries that reference a given table across Classic ASP files. Returns operation type, signature, and columns used.")]
+    public async Task<string> SqlFindTable(
         [Description("Workspace name (must be an asp-classic workspace)")] string workspace,
-        [Description("Table name to search for")] string tableName)
+        [Description("Table name to search for")] string tableName,
+        CancellationToken ct = default)
     {
-        if (!TryGetAspIndex(workspace, out AspIndex index))
+        AspIndex? index = await aspProvider.GetAsync(workspace, ct);
+        if (index is null)
             return Err("SQL tools require an asp-classic workspace");
 
         IReadOnlyList<(string FilePath, SqlQueryInfo Query)> results = index.FindByTable(tableName);
@@ -43,11 +34,14 @@ public sealed class SqlTools(AspIndexRegistry aspIndexes)
     }
 
     [McpServerTool(Name = "sql_get_signatures")]
-    public string SqlGetSignatures(
+    [Description("Get all normalised SQL query signatures from a single ASP file. Use to review what queries a file executes.")]
+    public async Task<string> SqlGetSignatures(
         [Description("Workspace name (must be an asp-classic workspace)")] string workspace,
-        [Description("File path")] string filePath)
+        [Description("File path")] string filePath,
+        CancellationToken ct = default)
     {
-        if (!TryGetAspIndex(workspace, out AspIndex index))
+        AspIndex? index = await aspProvider.GetAsync(workspace, ct);
+        if (index is null)
             return Err("SQL tools require an asp-classic workspace");
 
         IReadOnlyList<SqlQueryInfo> results = index.GetFileQueries(filePath);
@@ -55,11 +49,14 @@ public sealed class SqlTools(AspIndexRegistry aspIndexes)
     }
 
     [McpServerTool(Name = "sql_find_column")]
-    public string SqlFindColumn(
+    [Description("Find all SQL queries that reference a given column across Classic ASP files.")]
+    public async Task<string> SqlFindColumn(
         [Description("Workspace name (must be an asp-classic workspace)")] string workspace,
-        [Description("Column name to search for")] string columnName)
+        [Description("Column name to search for")] string columnName,
+        CancellationToken ct = default)
     {
-        if (!TryGetAspIndex(workspace, out AspIndex index))
+        AspIndex? index = await aspProvider.GetAsync(workspace, ct);
+        if (index is null)
             return Err("SQL tools require an asp-classic workspace");
 
         IReadOnlyList<(string FilePath, int LineNumber, string? TableName, string Operation, string Signature)> results =
@@ -78,10 +75,13 @@ public sealed class SqlTools(AspIndexRegistry aspIndexes)
     }
 
     [McpServerTool(Name = "sql_list_tables")]
-    public string SqlListTables(
-        [Description("Workspace name (must be an asp-classic workspace)")] string workspace)
+    [Description("List all tables referenced by SQL queries in a Classic ASP workspace, sorted by usage count. Use to understand data access patterns.")]
+    public async Task<string> SqlListTables(
+        [Description("Workspace name (must be an asp-classic workspace)")] string workspace,
+        CancellationToken ct = default)
     {
-        if (!TryGetAspIndex(workspace, out AspIndex index))
+        AspIndex? index = await aspProvider.GetAsync(workspace, ct);
+        if (index is null)
             return Err("SQL tools require an asp-classic workspace");
 
         IReadOnlyList<(string TableName, int UsageCount, IReadOnlyList<(string FilePath, int UsageCount)> Files)> results =

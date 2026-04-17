@@ -28,7 +28,11 @@
       "Bash(cat /c/Users/yve/AppData/Local/claude-cli-nodejs/Cache/C--Git-CodeIntelligenceMcp/mcp-logs-code-intelligence/*.log)",
       "Bash(ilspycmd:*)",
       "Bash(cat /c/Users/yve/AppData/Local/claude-cli-nodejs/Cache/C--Git-CodeIntelligenceMcp/mcp-logs-sql-schema/*.log)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "mcp__code-intelligence__get_codebase_wiki",
+      "mcp__code-intelligence__find_types",
+      "mcp__code-intelligence__get_diagnostics",
+      "mcp__code-intelligence__analyze_changes"
     ]
   }
 }

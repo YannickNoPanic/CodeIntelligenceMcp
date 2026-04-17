@@ -5,8 +5,21 @@
 A .NET 10 MCP server (stdio transport) that gives Claude Code structured,
 token-efficient access to two codebases without Claude needing to read files directly.
 
-The server indexes both workspaces on startup (in-memory) and exposes MCP tools.
-All tools are **read-only**. No write operations, no file watchers, no hot reload.
+Workspaces are **lazy-loaded**: the server starts instantly and indexes on the first tool call
+per workspace. Subsequent calls are instant. All tools are **read-only**.
+No write operations, no file watchers, no hot reload.
+
+---
+
+## Tool Use Priority
+
+When this MCP server is attached, use tools in this order — do not read files directly:
+
+1. **`get_codebase_wiki`** — call first in any session to understand structure and violations
+2. **`analyze_changes`** — call next if on a feature branch (replaces reading git diffs manually)
+3. Drill down with `find_types`, `get_type`, `find_violations`, `get_diagnostics` as needed
+
+See `docs/TOOLS.md` for full reference on all tools.
 
 ---
 
