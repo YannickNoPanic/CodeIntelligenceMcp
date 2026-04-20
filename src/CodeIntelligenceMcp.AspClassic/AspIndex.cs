@@ -13,10 +13,6 @@ public sealed class AspIndex
         @"<!--\s*#include\s+virtual\s*=\s*""([^""]+)""\s*-->",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static readonly Regex WordBoundaryPattern = new(
-        @"\b{0}\b",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
     private readonly IReadOnlyDictionary<string, AspFileInfo> _files;
     private readonly IReadOnlyList<(string FilePath, SqlQueryInfo Query)> _allSql;
     private readonly string _rootPath;

@@ -12,7 +12,8 @@ public sealed class ChangeAnalyzer(RoslynWorkspaceIndex index, CleanArchitecture
         "core-no-ef", "core-no-http", "core-no-azure",
         "usecase-not-sealed",
         "inline-viewmodel-razor", "business-logic-in-razor", "json-parsing-in-view",
-        "controller-not-thin", "dto-in-core"
+        "controller-not-thin", "dto-in-core",
+        "missing-cancellation-token", "no-async-void", "use-case-not-thin"
     ];
 
     public async Task<ChangeAnalysis> AnalyzeAsync(
@@ -21,13 +22,16 @@ public sealed class ChangeAnalyzer(RoslynWorkspaceIndex index, CleanArchitecture
         string baseBranch,
         bool includeSignatures,
         bool includeDiagnostics,
+        bool includeUncommitted,
         CancellationToken ct)
     {
         string? repoRoot = GitDiffService.ResolveRepoRoot(solutionPath);
         if (repoRoot is null)
             throw new InvalidOperationException("Could not find git repository root from solution path");
 
-        IReadOnlyList<ChangedFile> allChanges = GitDiffService.GetChangedFiles(repoRoot, baseBranch);
+        IReadOnlyList<ChangedFile> allChanges = includeUncommitted
+            ? GitDiffService.GetChangedFilesIncludingWorkingTree(repoRoot, baseBranch)
+            : GitDiffService.GetChangedFiles(repoRoot, baseBranch);
 
         string solutionDir = (Path.GetDirectoryName(solutionPath) ?? string.Empty).Replace('\\', '/');
 

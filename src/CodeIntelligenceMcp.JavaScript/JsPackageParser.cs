@@ -5,8 +5,6 @@ namespace CodeIntelligenceMcp.JavaScript;
 
 public static class JsPackageParser
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-
     public static JsProjectInfo ParseProjectInfo(string rootPath)
     {
         string? projectName = null;

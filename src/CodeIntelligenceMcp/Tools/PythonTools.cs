@@ -1,7 +1,7 @@
 namespace CodeIntelligenceMcp.Tools;
 
 [McpServerToolType]
-public sealed class PythonTools(PythonIndexRegistry indexes)
+public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider)
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -10,13 +10,15 @@ public sealed class PythonTools(PythonIndexRegistry indexes)
 
     [McpServerTool(Name = "get_python_wiki")]
     [Description("Generate a compact overview of a Python project: modules, classes, functions, imports, dependencies, and framework patterns.")]
-    public string GetPythonWiki(
+    public async Task<string> GetPythonWiki(
         [Description("Workspace name")] string workspace,
         [Description("Subdirectory or module prefix to focus on (e.g. 'src/api' or 'myapp')")] string? focusArea = null,
         [Description("Include pattern analysis (async usage, Pydantic models, FastAPI routes, etc.)")] bool includePatterns = true,
-        [Description("Include metrics (file counts, class/function counts)")] bool includeMetrics = false)
+        [Description("Include metrics (file counts, class/function counts)")] bool includeMetrics = false,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out PythonIndex? index))
+        PythonIndex? index = await pythonProvider.GetAsync(workspace, ct);
+        if (index is null)
             return Err("workspace not found");
 
         PythonWikiGenerator generator = new(index);
@@ -25,11 +27,13 @@ public sealed class PythonTools(PythonIndexRegistry indexes)
 
     [McpServerTool(Name = "py_get_file")]
     [Description("Get the full analysis of a single Python file: functions, classes, imports, exports.")]
-    public string PyGetFile(
+    public async Task<string> PyGetFile(
         [Description("Workspace name")] string workspace,
-        [Description("File path (absolute or relative to workspace root)")] string filePath)
+        [Description("File path (absolute or relative to workspace root)")] string filePath,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out PythonIndex? index))
+        PythonIndex? index = await pythonProvider.GetAsync(workspace, ct);
+        if (index is null)
             return Err("workspace not found");
 
         PythonFileInfo? info = index.GetFile(filePath);
@@ -41,11 +45,13 @@ public sealed class PythonTools(PythonIndexRegistry indexes)
 
     [McpServerTool(Name = "py_find_function")]
     [Description("Find Python functions and methods by name across all files in the workspace.")]
-    public string PyFindFunction(
+    public async Task<string> PyFindFunction(
         [Description("Workspace name")] string workspace,
-        [Description("Function name or partial name (case-insensitive)")] string functionName)
+        [Description("Function name or partial name (case-insensitive)")] string functionName,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out PythonIndex? index))
+        PythonIndex? index = await pythonProvider.GetAsync(workspace, ct);
+        if (index is null)
             return Err("workspace not found");
 
         IReadOnlyList<(string FilePath, PythonFunctionInfo Function)> results = index.FindFunction(functionName);
@@ -73,11 +79,13 @@ public sealed class PythonTools(PythonIndexRegistry indexes)
 
     [McpServerTool(Name = "py_find_class")]
     [Description("Find Python classes by name across all files in the workspace.")]
-    public string PyFindClass(
+    public async Task<string> PyFindClass(
         [Description("Workspace name")] string workspace,
-        [Description("Class name or partial name (case-insensitive)")] string className)
+        [Description("Class name or partial name (case-insensitive)")] string className,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out PythonIndex? index))
+        PythonIndex? index = await pythonProvider.GetAsync(workspace, ct);
+        if (index is null)
             return Err("workspace not found");
 
         IReadOnlyList<(string FilePath, PythonClassInfo Class)> results = index.FindClass(className);
@@ -98,11 +106,13 @@ public sealed class PythonTools(PythonIndexRegistry indexes)
 
     [McpServerTool(Name = "py_search")]
     [Description("Search for a term across function names, class names, and import paths in a Python workspace.")]
-    public string PySearch(
+    public async Task<string> PySearch(
         [Description("Workspace name")] string workspace,
-        [Description("Search term")] string query)
+        [Description("Search term")] string query,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out PythonIndex? index))
+        PythonIndex? index = await pythonProvider.GetAsync(workspace, ct);
+        if (index is null)
             return Err("workspace not found");
 
         IReadOnlyList<(string FilePath, int Line, string Context)> results = index.Search(query);

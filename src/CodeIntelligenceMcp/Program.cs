@@ -1,134 +1,43 @@
-using System.Diagnostics;
 using CodeIntelligenceMcp.Config;
 using CodeIntelligenceMcp.Tools;
+using CodeIntelligenceMcp.Workspaces;
 
 RoslynLoader.RegisterMSBuild();
 
 string configPath = Path.Combine(AppContext.BaseDirectory, "mcp-config.json");
 McpConfig config = McpConfigLoader.Load(configPath);
 
-var roslynIndexes = new Dictionary<string, RoslynWorkspaceIndex>();
-var aspIndexes = new Dictionary<string, AspIndex>();
-var psIndexes = new Dictionary<string, PowerShellIndex>();
-var pyIndexes = new Dictionary<string, PythonIndex>();
-var jsIndexes = new Dictionary<string, JsIndex>();
-var cleanArchConfig = new Dictionary<string, CleanArchitectureNames>();
-var solutionPaths = new Dictionary<string, string>();
+Dictionary<string, CleanArchitectureNames> cleanArchConfig = config.Workspaces
+    .Where(w => w.Type == "dotnet" && w.Solution is not null)
+    .ToDictionary(
+        w => w.Name,
+        w => w.CleanArchitecture is not null
+            ? new CleanArchitectureNames(
+                w.CleanArchitecture.CoreProject,
+                w.CleanArchitecture.InfraProject,
+                w.CleanArchitecture.WebProject)
+            : new CleanArchitectureNames(string.Empty, string.Empty, string.Empty));
 
-var totalStopwatch = Stopwatch.StartNew();
-
-foreach (WorkspaceConfig ws in config.Workspaces)
-{
-    if (ws.Type == "dotnet" && ws.Solution is not null)
-    {
-        try
-        {
-            CleanArchitectureNames cleanArch = ws.CleanArchitecture is not null
-                ? new CleanArchitectureNames(
-                    ws.CleanArchitecture.CoreProject,
-                    ws.CleanArchitecture.InfraProject,
-                    ws.CleanArchitecture.WebProject)
-                : new CleanArchitectureNames(string.Empty, string.Empty, string.Empty);
-
-            Console.Error.WriteLine($"[info] Loading dotnet workspace '{ws.Name}'...");
-            var sw = Stopwatch.StartNew();
-            RoslynWorkspaceIndex index = await RoslynLoader.LoadAsync(ws.Solution, cleanArch);
-            sw.Stop();
-            roslynIndexes[ws.Name] = index;
-            cleanArchConfig[ws.Name] = cleanArch;
-            solutionPaths[ws.Name] = ws.Solution;
-            Console.Error.WriteLine($"[info] Workspace '{ws.Name}' loaded — {index.TypeCount} types in {sw.Elapsed.TotalSeconds:F1}s");
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[warn] Failed to load dotnet workspace '{ws.Name}': {ex.Message}");
-        }
-    }
-    else if (ws.Type == "asp-classic" && ws.RootPath is not null)
-    {
-        try
-        {
-            Console.Error.WriteLine($"[info] Loading asp-classic workspace '{ws.Name}'...");
-            var sw = Stopwatch.StartNew();
-            AspIndex index = AspIndex.Build(ws.RootPath, msg => Console.Error.WriteLine(msg));
-            sw.Stop();
-            aspIndexes[ws.Name] = index;
-            Console.Error.WriteLine($"[info] Workspace '{ws.Name}' loaded — {index.FileCount} files in {sw.Elapsed.TotalSeconds:F1}s");
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[warn] Failed to load asp-classic workspace '{ws.Name}': {ex.Message}");
-        }
-    }
-    else if (ws.Type == "powershell" && ws.RootPath is not null)
-    {
-        try
-        {
-            Console.Error.WriteLine($"[info] Loading powershell workspace '{ws.Name}'...");
-            var sw = Stopwatch.StartNew();
-            PowerShellIndex index = PowerShellIndex.Build(ws.RootPath, msg => Console.Error.WriteLine(msg));
-            sw.Stop();
-            psIndexes[ws.Name] = index;
-            Console.Error.WriteLine($"[info] Workspace '{ws.Name}' loaded — {index.FileCount} files in {sw.Elapsed.TotalSeconds:F1}s");
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[warn] Failed to load powershell workspace '{ws.Name}': {ex.Message}");
-        }
-    }
-    else if (ws.Type == "python" && ws.RootPath is not null)
-    {
-        try
-        {
-            Console.Error.WriteLine($"[info] Loading python workspace '{ws.Name}'...");
-            var sw = Stopwatch.StartNew();
-            PythonIndex index = PythonIndex.Build(ws.RootPath, msg => Console.Error.WriteLine(msg));
-            sw.Stop();
-            pyIndexes[ws.Name] = index;
-            Console.Error.WriteLine($"[info] Workspace '{ws.Name}' loaded — {index.FileCount} files in {sw.Elapsed.TotalSeconds:F1}s");
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[warn] Failed to load python workspace '{ws.Name}': {ex.Message}");
-        }
-    }
-    else if (ws.Type == "javascript" && ws.RootPath is not null)
-    {
-        try
-        {
-            Console.Error.WriteLine($"[info] Loading javascript workspace '{ws.Name}'...");
-            var sw = Stopwatch.StartNew();
-            JsIndex index = JsIndex.Build(ws.RootPath, msg => Console.Error.WriteLine(msg));
-            sw.Stop();
-            jsIndexes[ws.Name] = index;
-            Console.Error.WriteLine($"[info] Workspace '{ws.Name}' loaded — {index.FileCount} files in {sw.Elapsed.TotalSeconds:F1}s");
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[warn] Failed to load javascript workspace '{ws.Name}': {ex.Message}");
-        }
-    }
-}
-
-totalStopwatch.Stop();
-Console.Error.WriteLine($"[info] All workspaces loaded in {totalStopwatch.Elapsed.TotalSeconds:F1}s");
+Dictionary<string, string> solutionPaths = config.Workspaces
+    .Where(w => w.Type == "dotnet" && w.Solution is not null)
+    .ToDictionary(w => w.Name, w => w.Solution!);
 
 bool useSse = args.Contains("--sse");
 
-var builder = WebApplication.CreateBuilder(args);
-
 if (useSse)
 {
+    var builder = WebApplication.CreateBuilder(args);
     int port = builder.Configuration.GetValue<int>("Mcp:Port", 5100);
     builder.WebHost.UseUrls($"http://localhost:{port}");
 
-    builder.Services.AddSingleton(new RoslynIndexRegistry(roslynIndexes));
-    builder.Services.AddSingleton(new AspIndexRegistry(aspIndexes));
-    builder.Services.AddSingleton(new PowerShellIndexRegistry(psIndexes));
-    builder.Services.AddSingleton(new PythonIndexRegistry(pyIndexes));
-    builder.Services.AddSingleton(new JsIndexRegistry(jsIndexes));
+    builder.Services.AddSingleton(config);
     builder.Services.AddSingleton(new CleanArchRegistry(cleanArchConfig));
     builder.Services.AddSingleton(new SolutionPathRegistry(solutionPaths));
+    builder.Services.AddSingleton<IWorkspaceProvider<RoslynWorkspaceIndex>, RoslynWorkspaceProvider>();
+    builder.Services.AddSingleton<IWorkspaceProvider<AspIndex>, AspWorkspaceProvider>();
+    builder.Services.AddSingleton<IWorkspaceProvider<PowerShellIndex>, PowerShellWorkspaceProvider>();
+    builder.Services.AddSingleton<IWorkspaceProvider<PythonIndex>, PythonWorkspaceProvider>();
+    builder.Services.AddSingleton<IWorkspaceProvider<JsIndex>, JsWorkspaceProvider>();
 
     builder.Services
         .AddMcpServer()
@@ -137,9 +46,12 @@ if (useSse)
         .WithTools<AspClassicTools>()
         .WithTools<SqlTools>()
         .WithTools<CodebaseWikiTool>()
+        .WithTools<DiagnosticsTool>()
+        .WithTools<ChangeAnalysisTool>()
         .WithTools<PowerShellTools>()
         .WithTools<PythonTools>()
-        .WithTools<JsTools>();
+        .WithTools<JsTools>()
+        .WithTools<WorkspaceManagementTool>();
 
     var app = builder.Build();
 
@@ -205,13 +117,19 @@ if (useSse)
 }
 else
 {
-    builder.Services.AddSingleton(new RoslynIndexRegistry(roslynIndexes));
-    builder.Services.AddSingleton(new AspIndexRegistry(aspIndexes));
-    builder.Services.AddSingleton(new PowerShellIndexRegistry(psIndexes));
-    builder.Services.AddSingleton(new PythonIndexRegistry(pyIndexes));
-    builder.Services.AddSingleton(new JsIndexRegistry(jsIndexes));
+    var builder = Host.CreateApplicationBuilder(args);
+
+    builder.Logging.ClearProviders();
+    builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
+
+    builder.Services.AddSingleton(config);
     builder.Services.AddSingleton(new CleanArchRegistry(cleanArchConfig));
     builder.Services.AddSingleton(new SolutionPathRegistry(solutionPaths));
+    builder.Services.AddSingleton<IWorkspaceProvider<RoslynWorkspaceIndex>, RoslynWorkspaceProvider>();
+    builder.Services.AddSingleton<IWorkspaceProvider<AspIndex>, AspWorkspaceProvider>();
+    builder.Services.AddSingleton<IWorkspaceProvider<PowerShellIndex>, PowerShellWorkspaceProvider>();
+    builder.Services.AddSingleton<IWorkspaceProvider<PythonIndex>, PythonWorkspaceProvider>();
+    builder.Services.AddSingleton<IWorkspaceProvider<JsIndex>, JsWorkspaceProvider>();
 
     builder.Services
         .AddMcpServer()
@@ -220,9 +138,12 @@ else
         .WithTools<AspClassicTools>()
         .WithTools<SqlTools>()
         .WithTools<CodebaseWikiTool>()
+        .WithTools<DiagnosticsTool>()
+        .WithTools<ChangeAnalysisTool>()
         .WithTools<PowerShellTools>()
         .WithTools<PythonTools>()
-        .WithTools<JsTools>();
+        .WithTools<JsTools>()
+        .WithTools<WorkspaceManagementTool>();
 
     Console.Error.WriteLine("[CodeIntelligenceMcp] Stdio mode");
 

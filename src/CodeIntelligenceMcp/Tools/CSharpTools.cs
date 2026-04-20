@@ -181,11 +181,187 @@ public sealed class CSharpTools(
         return Ok(summary);
     }
 
+    [McpServerTool(Name = "get_test_coverage")]
+    [Description("Report which use cases have a matching *Tests class in any .Tests project. Convention-based: use case name + 'Tests' must exist. Returns coverage percentage and lists uncovered use cases.")]
+    public async Task<string> GetTestCoverage(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        CancellationToken ct = default)
+    {
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
+
+        return Ok(index.GetTestCoverage());
+    }
+
+    [McpServerTool(Name = "get_complexity")]
+    [Description("List methods ordered by cyclomatic complexity or line count. Use to identify risky or hard-to-test code. Complexity >= 8 warrants review; >= 15 is a refactor candidate.")]
+    public async Task<string> GetComplexity(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        [Description("Only return methods with complexity >= this threshold (default 5)")] int minComplexity = 5,
+        [Description("Filter to a specific project name (substring match)")] string? projectFilter = null,
+        [Description("Also include methods with >= this many lines regardless of complexity (default 0 = disabled)")] int minLines = 0,
+        [Description("Sort by 'complexity' (default) or 'lines'")] string sortBy = "complexity",
+        CancellationToken ct = default)
+    {
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
+
+        ComplexityAnalyzer analyzer = new(index);
+        IReadOnlyList<MethodComplexity> results = analyzer.Analyze(minComplexity, projectFilter, minLines, sortBy);
+        return Ok(results);
+    }
+
+    [McpServerTool(Name = "scan_all_violations")]
+    [Description("Run every violation rule in one call. Returns only rules with violations, ordered by count descending. Use as a quick codebase health check at the start of a session.")]
+    public async Task<string> ScanAllViolations(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        [Description("Maximum violations to include per rule (default 50, 0 = unlimited)")] int maxPerRule = 50,
+        CancellationToken ct = default)
+    {
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
+
+        CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
+        ViolationDetector detector = new(index, ca);
+
+        string[] allRules =
+        [
+            "core-no-ef", "core-no-http", "core-no-azure",
+            "usecase-not-sealed", "dto-in-core", "use-case-not-thin", "layer-boundary",
+            "controller-not-thin",
+            "inline-viewmodel-razor", "business-logic-in-razor", "json-parsing-in-view", "blazor-injects-infra",
+            "missing-cancellation-token", "no-async-void", "async-over-sync",
+            "empty-catch", "throw-ex", "too-many-params",
+            "services-in-web", "missing-interface", "direct-instantiation"
+        ];
+
+        var results = allRules
+            .Select(rule =>
+            {
+                try
+                {
+                    IReadOnlyList<ViolationResult> violations = detector.Detect(rule);
+                    IReadOnlyList<ViolationResult> capped = maxPerRule > 0 && violations.Count > maxPerRule
+                        ? [.. violations.Take(maxPerRule)]
+                        : violations;
+                    return (rule, count: violations.Count, violations: capped);
+                }
+                catch
+                {
+                    return (rule, count: 0, violations: (IReadOnlyList<ViolationResult>)[]);
+                }
+            })
+            .Where(r => r.count > 0)
+            .OrderByDescending(r => r.count)
+            .Select(r => new { r.rule, r.count, r.violations })
+            .ToList();
+
+        return Ok(results);
+    }
+
+    [McpServerTool(Name = "find_dead_code")]
+    [Description("Find private methods, properties, and fields that have no references. Scoped to private members only. May be slow on large codebases — use projectFilter to narrow scope.")]
+    public async Task<string> FindDeadCode(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        [Description("Filter to a specific project name (substring match)")] string? projectFilter = null,
+        CancellationToken ct = default)
+    {
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
+
+        IReadOnlyList<DeadCodeResult> results = await index.FindDeadCodeAsync(projectFilter, ct);
+        return Ok(results);
+    }
+
+    [McpServerTool(Name = "find_callers")]
+    [Description("Find all callers of a specific method. Use before refactoring to understand impact — returns caller type, method name, file, line, and the calling line text.")]
+    public async Task<string> FindCallers(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        [Description("Type name that owns the method")] string typeName,
+        [Description("Method name to find callers of")] string methodName,
+        CancellationToken ct = default)
+    {
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
+
+        IReadOnlyList<CallerResult> results = await index.FindCallersAsync(typeName, methodName, ct);
+        return Ok(results);
+    }
+
+    [McpServerTool(Name = "get_coupling")]
+    [Description("List types ordered by efferent coupling (number of unique external types they depend on). Combine with get_complexity to find the highest-risk refactoring candidates.")]
+    public async Task<string> GetCoupling(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        [Description("Only return types with coupling >= this threshold (default 5)")] int minCoupling = 5,
+        [Description("Filter to a specific project name (substring match)")] string? projectFilter = null,
+        CancellationToken ct = default)
+    {
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
+
+        IReadOnlyList<TypeCoupling> results = index.GetCoupling(projectFilter, minCoupling);
+        return Ok(results);
+    }
+
+    [McpServerTool(Name = "get_hotspots")]
+    [Description("List the top N types with the highest combined risk score (coupling + complexity + missing tests). Use at the start of a session to find the most dangerous code to touch — no type name needed.")]
+    public async Task<string> GetHotspots(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        [Description("Maximum number of results to return (default 20)")] int topN = 20,
+        [Description("Filter to a specific project name (substring match)")] string? projectFilter = null,
+        CancellationToken ct = default)
+    {
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
+
+        return Ok(index.GetHotspots(topN, projectFilter));
+    }
+
+    [McpServerTool(Name = "find_circular_dependencies")]
+    [Description("Find cycles in the project dependency graph. Circular dependencies prevent clean layering and block independent deployment. Returns each cycle as an ordered list of project names.")]
+    public async Task<string> FindCircularDependencies(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        CancellationToken ct = default)
+    {
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
+
+        IReadOnlyList<IReadOnlyList<string>> cycles = index.FindCircularDependencies();
+        return Ok(new { cycleCount = cycles.Count, cycles });
+    }
+
+    [McpServerTool(Name = "get_change_risk")]
+    [Description("Score the refactoring risk for a type: 0-100 based on referencing types, coupling, max complexity, and test coverage. Use before refactoring to understand blast radius.")]
+    public async Task<string> GetChangeRisk(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        [Description("Type name to assess")] string typeName,
+        CancellationToken ct = default)
+    {
+        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        if (index is null)
+            return Err($"workspace '{workspace}' not found");
+
+        ChangeRiskResult? result = await index.GetChangeRiskAsync(typeName, ct);
+        if (result is null)
+            return Err("type not found");
+
+        return Ok(result);
+    }
+
     [McpServerTool(Name = "find_violations")]
-    [Description("Run a specific architectural rule across the workspace. Rules: core-no-ef, core-no-http, core-no-azure, usecase-not-sealed, inline-viewmodel-razor, business-logic-in-razor, json-parsing-in-view, controller-not-thin, dto-in-core.")]
+    [Description("Run a specific architectural rule across the workspace. Rules: core-no-ef, core-no-http, core-no-azure, usecase-not-sealed, inline-viewmodel-razor, business-logic-in-razor, json-parsing-in-view, blazor-injects-infra, controller-not-thin, dto-in-core, missing-cancellation-token, no-async-void, async-over-sync, use-case-not-thin, empty-catch, throw-ex, layer-boundary, too-many-params, services-in-web, missing-interface, direct-instantiation.")]
     public async Task<string> FindViolations(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
-        [Description("Rule key: core-no-ef, core-no-http, core-no-azure, usecase-not-sealed, inline-viewmodel-razor, business-logic-in-razor, json-parsing-in-view, controller-not-thin, dto-in-core")] string rule,
+        [Description("Rule key: core-no-ef, core-no-http, core-no-azure, usecase-not-sealed, inline-viewmodel-razor, business-logic-in-razor, json-parsing-in-view, blazor-injects-infra, controller-not-thin, dto-in-core, missing-cancellation-token, no-async-void, async-over-sync, use-case-not-thin, empty-catch, throw-ex, layer-boundary, too-many-params, services-in-web, missing-interface, direct-instantiation")] string rule,
+        [Description("Filter results to a specific project name (substring match on file path)")] string? projectFilter = null,
         CancellationToken ct = default)
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
@@ -198,6 +374,14 @@ public sealed class CSharpTools(
         try
         {
             IReadOnlyList<ViolationResult> violations = detector.Detect(rule);
+
+            if (projectFilter is not null)
+            {
+                violations = [.. violations.Where(v =>
+                    v.FilePath.Contains(projectFilter, StringComparison.OrdinalIgnoreCase)
+                    || (v.TypeName?.Contains(projectFilter, StringComparison.OrdinalIgnoreCase) == true))];
+            }
+
             return Ok(violations);
         }
         catch (ArgumentException ex)

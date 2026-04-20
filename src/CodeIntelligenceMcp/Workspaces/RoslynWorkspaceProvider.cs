@@ -45,6 +45,14 @@ internal sealed class RoslynWorkspaceProvider(McpConfig config) : IWorkspaceProv
         }
     }
 
+    public bool Invalidate(string workspace)
+    {
+        string cacheKey = Path.IsPathRooted(workspace)
+            ? workspace.Replace('\\', '/')
+            : workspace;
+        return _loaded.TryRemove(cacheKey, out _);
+    }
+
     private static async Task<RoslynWorkspaceIndex> LoadAsync(WorkspaceConfig ws)
     {
         CleanArchitectureNames cleanArch = ws.CleanArchitecture is not null

@@ -1,7 +1,7 @@
 namespace CodeIntelligenceMcp.Tools;
 
 [McpServerToolType]
-public sealed class JsTools(JsIndexRegistry indexes)
+public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -10,13 +10,15 @@ public sealed class JsTools(JsIndexRegistry indexes)
 
     [McpServerTool(Name = "get_js_wiki")]
     [Description("Generate a compact overview of a JavaScript/TypeScript project: modules, components, exports, imports, dependencies, and framework patterns.")]
-    public string GetJsWiki(
+    public async Task<string> GetJsWiki(
         [Description("Workspace name")] string workspace,
         [Description("Subdirectory to focus on (e.g. 'src/components' or 'server/api')")] string? focusArea = null,
         [Description("Include pattern analysis (Vue SFC, Nuxt conventions, React components, etc.)")] bool includePatterns = true,
-        [Description("Include metrics (file counts, function/class/interface counts)")] bool includeMetrics = false)
+        [Description("Include metrics (file counts, function/class/interface counts)")] bool includeMetrics = false,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out JsIndex? index))
+        JsIndex? index = await jsProvider.GetAsync(workspace, ct);
+        if (index is null)
             return Err("workspace not found");
 
         JsWikiGenerator generator = new(index);
@@ -25,11 +27,13 @@ public sealed class JsTools(JsIndexRegistry indexes)
 
     [McpServerTool(Name = "js_get_file")]
     [Description("Get the full analysis of a single JS/TS/Vue file: functions, classes, imports, exports, interfaces, or Vue SFC blocks.")]
-    public string JsGetFile(
+    public async Task<string> JsGetFile(
         [Description("Workspace name")] string workspace,
-        [Description("File path (absolute or relative to workspace root)")] string filePath)
+        [Description("File path (absolute or relative to workspace root)")] string filePath,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out JsIndex? index))
+        JsIndex? index = await jsProvider.GetAsync(workspace, ct);
+        if (index is null)
             return Err("workspace not found");
 
         // Try as Vue file first
@@ -49,11 +53,13 @@ public sealed class JsTools(JsIndexRegistry indexes)
 
     [McpServerTool(Name = "js_find_function")]
     [Description("Find JavaScript/TypeScript functions by name across all files in the workspace, including Vue SFC script blocks.")]
-    public string JsFindFunction(
+    public async Task<string> JsFindFunction(
         [Description("Workspace name")] string workspace,
-        [Description("Function name or partial name (case-insensitive)")] string functionName)
+        [Description("Function name or partial name (case-insensitive)")] string functionName,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out JsIndex? index))
+        JsIndex? index = await jsProvider.GetAsync(workspace, ct);
+        if (index is null)
             return Err("workspace not found");
 
         IReadOnlyList<(string FilePath, JsFunctionInfo Function)> results = index.FindFunction(functionName);
@@ -75,11 +81,13 @@ public sealed class JsTools(JsIndexRegistry indexes)
 
     [McpServerTool(Name = "js_find_class")]
     [Description("Find JavaScript/TypeScript classes by name across all files in the workspace.")]
-    public string JsFindClass(
+    public async Task<string> JsFindClass(
         [Description("Workspace name")] string workspace,
-        [Description("Class name or partial name (case-insensitive)")] string className)
+        [Description("Class name or partial name (case-insensitive)")] string className,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out JsIndex? index))
+        JsIndex? index = await jsProvider.GetAsync(workspace, ct);
+        if (index is null)
             return Err("workspace not found");
 
         IReadOnlyList<(string FilePath, JsClassInfo Class)> results = index.FindClass(className);
@@ -101,11 +109,13 @@ public sealed class JsTools(JsIndexRegistry indexes)
 
     [McpServerTool(Name = "js_search")]
     [Description("Search for a term across function names, class names, exports, and import paths in a JavaScript/TypeScript workspace.")]
-    public string JsSearch(
+    public async Task<string> JsSearch(
         [Description("Workspace name")] string workspace,
-        [Description("Search term")] string query)
+        [Description("Search term")] string query,
+        CancellationToken ct = default)
     {
-        if (!indexes.Indexes.TryGetValue(workspace, out JsIndex? index))
+        JsIndex? index = await jsProvider.GetAsync(workspace, ct);
+        if (index is null)
             return Err("workspace not found");
 
         IReadOnlyList<(string FilePath, int Line, string Context)> results = index.Search(query);

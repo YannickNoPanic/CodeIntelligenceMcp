@@ -45,6 +45,14 @@ internal sealed class AspWorkspaceProvider(McpConfig config) : IWorkspaceProvide
         }
     }
 
+    public bool Invalidate(string workspace)
+    {
+        string cacheKey = Path.IsPathRooted(workspace)
+            ? workspace.Replace('\\', '/')
+            : workspace;
+        return _loaded.TryRemove(cacheKey, out _);
+    }
+
     private static Task<AspIndex> LoadAsync(WorkspaceConfig ws)
     {
         return Task.Run(() =>

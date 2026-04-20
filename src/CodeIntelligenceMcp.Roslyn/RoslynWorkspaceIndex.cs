@@ -507,6 +507,115 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         return results;
     }
 
+    internal IEnumerable<string> GetRazorFilePaths()
+    {
+        if (_solution is null)
+            yield break;
+
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach (Project project in _solution.Projects)
+        {
+            string? projectDir = Path.GetDirectoryName(project.FilePath);
+            if (string.IsNullOrEmpty(projectDir) || !Directory.Exists(projectDir))
+                continue;
+
+            foreach (string razorFile in Directory.GetFiles(projectDir, "*.razor", SearchOption.AllDirectories))
+            {
+                if (razorFile.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                    || razorFile.Contains("/obj/", StringComparison.Ordinal))
+                    continue;
+
+                if (seen.Add(razorFile))
+                    yield return razorFile;
+            }
+        }
+    }
+
+    internal IEnumerable<Document> GetAllDocuments(bool skipTests = true, bool skipGenerated = true)
+    {
+        if (_solution is null)
+            return [];
+
+        IEnumerable<Project> projects = _solution.Projects;
+
+        if (skipTests)
+            projects = projects.Where(p => !p.Name.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase));
+
+        IEnumerable<Document> docs = projects.SelectMany(p => p.Documents);
+
+        if (skipGenerated)
+            docs = docs.Where(d => d.FilePath?.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase) != true);
+
+        return docs;
+    }
+
+    public async Task<IReadOnlyList<Models.DeadCodeResult>> FindDeadCodeAsync(
+        string? projectFilter = null,
+        CancellationToken ct = default)
+    {
+        if (_solution is null)
+            return [];
+
+        List<Models.DeadCodeResult> results = [];
+
+        foreach ((INamedTypeSymbol symbol, string projectName, string filePath, int lineStart) in QueryTypes())
+        {
+            if (projectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (projectFilter is not null
+                && !projectName.Contains(projectFilter, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            foreach (ISymbol member in symbol.GetMembers())
+            {
+                if (member.DeclaredAccessibility != Accessibility.Private)
+                    continue;
+
+                if (member.IsImplicitlyDeclared)
+                    continue;
+
+                // Skip compiler-generated names (e.g. <Main>$, backing fields)
+                if (member.Name.Contains('<'))
+                    continue;
+
+                // Skip synthesized record members that never have user-level references
+                if (symbol.IsRecord && member.Name is "EqualityContract" or "PrintMembers")
+                    continue;
+
+                string memberKind;
+                switch (member)
+                {
+                    case IMethodSymbol m when m.MethodKind == MethodKind.Ordinary && !m.IsImplicitlyDeclared:
+                        memberKind = "method";
+                        break;
+                    case IPropertySymbol p when !p.IsImplicitlyDeclared:
+                        memberKind = "property";
+                        break;
+                    case IFieldSymbol f when !f.IsImplicitlyDeclared:
+                        memberKind = "field";
+                        break;
+                    default:
+                        continue;
+                }
+
+                IEnumerable<ReferencedSymbol> refs = await SymbolFinder.FindReferencesAsync(
+                    member, _solution, ct);
+
+                if (refs.Any(r => r.Locations.Any()))
+                    continue;
+
+                Location? loc = member.Locations.FirstOrDefault(l => l.IsInSource);
+                int line = loc is not null ? loc.GetLineSpan().StartLinePosition.Line + 1 : lineStart;
+
+                results.Add(new Models.DeadCodeResult(symbol.Name, member.Name, memberKind, filePath, line));
+            }
+        }
+
+        return results;
+    }
+
     internal IEnumerable<Document> GetProjectDocuments(string projectName)
     {
         if (_solution is null)
@@ -555,6 +664,48 @@ public sealed class RoslynWorkspaceIndex : IDisposable
                 indexed.Symbol.IsSealed,
                 indexed.Symbol.TypeKind == TypeKind.Interface);
         }
+    }
+
+    internal IEnumerable<(INamedTypeSymbol Symbol, string ProjectName, string FilePath, int LineStart)>
+        QueryTypes(Func<INamedTypeSymbol, bool>? predicate = null)
+    {
+        foreach (IndexedType indexed in _allTypes)
+        {
+            if (predicate is null || predicate(indexed.Symbol))
+                yield return (indexed.Symbol, indexed.ProjectName, indexed.FilePath, indexed.LineStart);
+        }
+    }
+
+    public TestCoverageResult GetTestCoverage()
+    {
+        List<IndexedType> useCases = [.. _allTypes.Where(t =>
+            !t.ProjectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase)
+            && t.Symbol.TypeKind == TypeKind.Class
+            && !t.Symbol.IsAbstract
+            && (t.Symbol.Name.EndsWith("UseCase", StringComparison.Ordinal)
+                || t.Symbol.AllInterfaces.Any(i => i.Name.StartsWith("IUseCase", StringComparison.OrdinalIgnoreCase))))];
+
+        ILookup<string, IndexedType> testsByName = _allTypes
+            .Where(t => t.ProjectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+            .ToLookup(t => t.Symbol.Name, StringComparer.Ordinal);
+
+        List<CoveredUseCase> covered = [];
+        List<UncoveredUseCase> uncovered = [];
+
+        foreach (IndexedType uc in useCases)
+        {
+            IndexedType? test = testsByName[uc.Symbol.Name + "Tests"].FirstOrDefault();
+            if (test is not null)
+                covered.Add(new CoveredUseCase(uc.Symbol.Name, test.Symbol.Name, test.FilePath));
+            else
+                uncovered.Add(new UncoveredUseCase(
+                    uc.Symbol.Name,
+                    uc.Symbol.ContainingNamespace?.ToDisplayString() ?? string.Empty,
+                    uc.FilePath));
+        }
+
+        double pct = useCases.Count == 0 ? 0 : Math.Round(100.0 * covered.Count / useCases.Count, 1);
+        return new TestCoverageResult(useCases.Count, covered.Count, pct, uncovered, covered);
     }
 
     private IndexedType? FindIndexedType(string typeName)
@@ -721,6 +872,386 @@ public sealed class RoslynWorkspaceIndex : IDisposable
                 t.FilePath,
                 t.LineStart,
                 GetKind(t.Symbol)))];
+    }
+
+    public async Task<IReadOnlyList<CallerResult>> FindCallersAsync(
+        string typeName,
+        string methodName,
+        CancellationToken ct = default)
+    {
+        if (_solution is null)
+            return [];
+
+        IndexedType? indexed = FindIndexedType(typeName);
+        if (indexed is null)
+            return [];
+
+        IMethodSymbol? method = indexed.Symbol.GetMembers(methodName)
+            .OfType<IMethodSymbol>()
+            .FirstOrDefault(m => m.MethodKind == MethodKind.Ordinary);
+        if (method is null)
+            return [];
+
+        IEnumerable<ReferencedSymbol> refs = await SymbolFinder.FindReferencesAsync(method, _solution, ct);
+
+        List<CallerResult> results = [];
+
+        foreach (ReferencedSymbol referencedSymbol in refs)
+        {
+            foreach (ReferenceLocation refLocation in referencedSymbol.Locations)
+            {
+                Location location = refLocation.Location;
+                if (!location.IsInSource || location.SourceTree is null)
+                    continue;
+
+                SyntaxNode root = await location.SourceTree.GetRootAsync(ct);
+                SyntaxNode? node = root.FindNode(location.SourceSpan);
+
+                string callerType = "<unknown>";
+                string callerMethod = "<unknown>";
+                SyntaxNode? current = node;
+                while (current is not null)
+                {
+                    if (current is MethodDeclarationSyntax md && callerMethod == "<unknown>")
+                        callerMethod = md.Identifier.Text;
+                    else if (current is ConstructorDeclarationSyntax && callerMethod == "<unknown>")
+                        callerMethod = ".ctor";
+
+                    if (current is TypeDeclarationSyntax td)
+                    {
+                        callerType = td.Identifier.Text;
+                        break;
+                    }
+                    current = current.Parent;
+                }
+
+                FileLinePositionSpan span = location.GetLineSpan();
+                int lineNumber = span.StartLinePosition.Line + 1;
+
+                string lineText = string.Empty;
+                string[] lines = location.SourceTree.ToString().Split('\n');
+                int lineIdx = span.StartLinePosition.Line;
+                if (lineIdx >= 0 && lineIdx < lines.Length)
+                    lineText = lines[lineIdx].Trim();
+
+                string filePath = location.SourceTree.FilePath;
+                if (filePath.EndsWith(".razor.g.cs", StringComparison.OrdinalIgnoreCase))
+                    filePath = filePath[..^".g.cs".Length];
+
+                results.Add(new CallerResult(callerType, callerMethod, filePath, lineNumber, lineText));
+            }
+        }
+
+        return results;
+    }
+
+    public IReadOnlyList<TypeCoupling> GetCoupling(string? projectFilter = null, int minCoupling = 5)
+    {
+        List<TypeCoupling> results = [];
+
+        foreach (IndexedType indexed in _allTypes)
+        {
+            if (indexed.ProjectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (projectFilter is not null
+                && !indexed.ProjectName.Contains(projectFilter, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            HashSet<string> dependsOn = [];
+
+            foreach (ISymbol member in indexed.Symbol.GetMembers())
+            {
+                IEnumerable<ITypeSymbol> types = member switch
+                {
+                    IFieldSymbol f => [f.Type],
+                    IPropertySymbol p => [p.Type],
+                    IMethodSymbol m => [.. m.Parameters.Select(p => p.Type), m.ReturnType],
+                    _ => []
+                };
+
+                foreach (ITypeSymbol t in types)
+                    CollectExternalTypes(t, indexed.Symbol, dependsOn);
+            }
+
+            if (dependsOn.Count < minCoupling)
+                continue;
+
+            results.Add(new TypeCoupling(
+                indexed.Symbol.Name,
+                indexed.FilePath,
+                indexed.LineStart,
+                dependsOn.Count,
+                [.. dependsOn.OrderBy(x => x)]));
+        }
+
+        return [.. results.OrderByDescending(r => r.EfferentCoupling)];
+    }
+
+    private static void CollectExternalTypes(ITypeSymbol type, INamedTypeSymbol owner, HashSet<string> collected)
+    {
+        if (type.SpecialType != SpecialType.None)
+            return;
+
+        if (SymbolEqualityComparer.Default.Equals(type, owner))
+            return;
+
+        if (type is INamedTypeSymbol named)
+        {
+            string name = named.Name;
+            bool isNoise = name is "Void" or "Task" or "ValueTask" or "CancellationToken"
+                or "IEnumerable" or "IReadOnlyList" or "IList" or "List" or "Dictionary"
+                or "IReadOnlyDictionary" or "HashSet" or "ISet" or "Exception" or "Nullable"
+                or "Object" or "String" or "JsonElement" or "JsonDocument";
+
+            if (!isNoise && !string.IsNullOrEmpty(name))
+                collected.Add(name);
+
+            foreach (ITypeSymbol arg in named.TypeArguments)
+                CollectExternalTypes(arg, owner, collected);
+        }
+        else if (type is IArrayTypeSymbol array)
+        {
+            CollectExternalTypes(array.ElementType, owner, collected);
+        }
+    }
+
+    public async Task<ChangeRiskResult?> GetChangeRiskAsync(string typeName, CancellationToken ct = default)
+    {
+        if (_solution is null)
+            return null;
+
+        IndexedType? indexed = FindIndexedType(typeName);
+        if (indexed is null)
+            return null;
+
+        // 1. Referencing types — how many distinct types reference this one
+        IEnumerable<ReferencedSymbol> refs = await SymbolFinder.FindReferencesAsync(indexed.Symbol, _solution, ct);
+
+        HashSet<string> referencingTypeNames = new(StringComparer.Ordinal);
+        foreach (ReferencedSymbol refSym in refs)
+        {
+            foreach (ReferenceLocation loc in refSym.Locations)
+            {
+                if (!loc.Location.IsInSource || loc.Location.SourceTree is null)
+                    continue;
+
+                SyntaxNode root = await loc.Location.SourceTree.GetRootAsync(ct);
+                SyntaxNode? node = root.FindNode(loc.Location.SourceSpan);
+                SyntaxNode? current = node;
+
+                while (current is not null)
+                {
+                    if (current is TypeDeclarationSyntax td)
+                    {
+                        if (!td.Identifier.Text.Equals(indexed.Symbol.Name, StringComparison.Ordinal))
+                            referencingTypeNames.Add(td.Identifier.Text);
+                        break;
+                    }
+                    current = current.Parent;
+                }
+            }
+        }
+
+        // 2. Coupling
+        HashSet<string> couplingSet = new(StringComparer.Ordinal);
+        foreach (ISymbol member in indexed.Symbol.GetMembers())
+        {
+            IEnumerable<ITypeSymbol> types = member switch
+            {
+                IFieldSymbol f => [f.Type],
+                IPropertySymbol p => [p.Type],
+                IMethodSymbol m => [.. m.Parameters.Select(p => p.Type), m.ReturnType],
+                _ => []
+            };
+            foreach (ITypeSymbol t in types)
+                CollectExternalTypes(t, indexed.Symbol, couplingSet);
+        }
+
+        // 3. Complexity — scoped to this type only
+        ComplexityAnalyzer complexityAnalyzer = new(this);
+        IReadOnlyList<MethodComplexity> allMethods = complexityAnalyzer.Analyze(
+            minComplexity: 1, typeFilter: indexed.Symbol.Name);
+        int maxComplexity = allMethods.Count > 0 ? allMethods.Max(m => m.Complexity) : 1;
+        IReadOnlyList<MethodComplexity> hotspots = [.. allMethods
+            .Where(m => m.Complexity >= 5)
+            .OrderByDescending(m => m.Complexity)];
+
+        // 4. Tests — convention: XxxTests class in a .Tests project
+        bool hasTests = _allTypes.Any(t =>
+            t.ProjectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase)
+            && t.Symbol.Name.Equals(indexed.Symbol.Name + "Tests", StringComparison.Ordinal));
+
+        // 5. Score
+        int referencingCount = referencingTypeNames.Count;
+        int coupling = couplingSet.Count;
+
+        int refScore = referencingCount switch { 0 => 0, <= 3 => 10, <= 10 => 20, _ => 30 };
+        int couplingScore = coupling switch { <= 4 => 0, <= 9 => 8, <= 14 => 17, _ => 25 };
+        int complexityScore = maxComplexity switch { <= 4 => 0, <= 9 => 8, <= 14 => 17, _ => 25 };
+        int testScore = hasTests ? 0 : 20;
+        int totalScore = refScore + couplingScore + complexityScore + testScore;
+
+        string riskLabel = totalScore switch { <= 20 => "low", <= 50 => "medium", <= 75 => "high", _ => "very-high" };
+
+        List<string> summaryParts = [];
+        if (referencingCount > 5) summaryParts.Add($"{referencingCount} referencing types");
+        if (coupling > 10) summaryParts.Add($"coupling {coupling}");
+        if (maxComplexity >= 10) summaryParts.Add($"max complexity {maxComplexity}");
+        if (!hasTests) summaryParts.Add("no tests");
+
+        string detail = summaryParts.Count > 0 ? ": " + string.Join(", ", summaryParts) : string.Empty;
+        string summary = $"{char.ToUpperInvariant(riskLabel[0]) + riskLabel[1..]} risk ({totalScore}/100){detail}.";
+
+        return new ChangeRiskResult(
+            indexed.Symbol.Name,
+            totalScore,
+            riskLabel,
+            referencingCount,
+            coupling,
+            maxComplexity,
+            hasTests,
+            [.. referencingTypeNames.OrderBy(x => x)],
+            hotspots,
+            summary);
+    }
+
+    public IReadOnlyList<HotspotResult> GetHotspots(int topN = 20, string? projectFilter = null)
+    {
+        ComplexityAnalyzer complexityAnalyzer = new(this);
+        IReadOnlyList<MethodComplexity> allComplexity = complexityAnalyzer.Analyze(minComplexity: 1, projectFilter: projectFilter);
+
+        // Group max complexity per type
+        Dictionary<string, int> maxByType = allComplexity
+            .GroupBy(m => m.TypeName)
+            .ToDictionary(g => g.Key, g => g.Max(m => m.Complexity), StringComparer.Ordinal);
+
+        // Build coupling per type using already-indexed types
+        List<HotspotResult> results = [];
+
+        foreach (IndexedType indexed in _allTypes)
+        {
+            if (indexed.ProjectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (indexed.FilePath.Contains("/obj/", StringComparison.Ordinal)
+                || indexed.FilePath.Contains("\\obj\\", StringComparison.Ordinal))
+                continue;
+            if (projectFilter is not null
+                && !indexed.ProjectName.Contains(projectFilter, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (indexed.Symbol.TypeKind == TypeKind.Interface)
+                continue;
+            // DbContext has trivially high coupling — not an actionable hotspot
+            if (indexed.Symbol.BaseType?.Name == "DbContext")
+                continue;
+
+            HashSet<string> couplingSet = new(StringComparer.Ordinal);
+            foreach (ISymbol member in indexed.Symbol.GetMembers())
+            {
+                IEnumerable<ITypeSymbol> types = member switch
+                {
+                    IFieldSymbol f => [f.Type],
+                    IPropertySymbol p => [p.Type],
+                    IMethodSymbol m => [.. m.Parameters.Select(p => p.Type), m.ReturnType],
+                    _ => []
+                };
+                foreach (ITypeSymbol t in types)
+                    CollectExternalTypes(t, indexed.Symbol, couplingSet);
+            }
+
+            int coupling = couplingSet.Count;
+            int maxComplexity = maxByType.GetValueOrDefault(indexed.Symbol.Name, 1);
+            bool hasTests = _allTypes.Any(t =>
+                t.ProjectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase)
+                && t.Symbol.Name.Equals(indexed.Symbol.Name + "Tests", StringComparison.Ordinal));
+
+            int couplingScore = coupling switch { <= 4 => 0, <= 9 => 8, <= 14 => 17, _ => 25 };
+            int complexityScore = maxComplexity switch { <= 4 => 0, <= 9 => 8, <= 14 => 17, _ => 25 };
+            int testScore = hasTests ? 0 : 20;
+            int score = couplingScore + complexityScore + testScore;
+
+            if (score == 0)
+                continue;
+
+            List<string> reasons = [];
+            if (coupling > 9) reasons.Add($"coupling {coupling}");
+            if (maxComplexity >= 8) reasons.Add($"complexity {maxComplexity}");
+            if (!hasTests) reasons.Add("no tests");
+            string reason = string.Join(", ", reasons);
+
+            results.Add(new HotspotResult(
+                indexed.Symbol.Name,
+                indexed.FilePath,
+                indexed.LineStart,
+                score,
+                coupling,
+                maxComplexity,
+                hasTests,
+                reason));
+        }
+
+        return [.. results.OrderByDescending(r => r.HotspotScore).Take(topN)];
+    }
+
+    public IReadOnlyList<IReadOnlyList<string>> FindCircularDependencies()
+    {
+        if (_solution is null)
+            return [];
+
+        ProjectDependencyGraph graph = _solution.GetProjectDependencyGraph();
+
+        Dictionary<ProjectId, string> nameById = _solution.Projects
+            .ToDictionary(p => p.Id, p => p.Name);
+
+        Dictionary<string, HashSet<string>> adjacency = [];
+        foreach (Project project in _solution.Projects)
+        {
+            string name = project.Name;
+            if (!adjacency.ContainsKey(name))
+                adjacency[name] = [];
+
+            foreach (ProjectId dep in graph.GetProjectsThatThisProjectDirectlyDependsOn(project.Id))
+            {
+                if (nameById.TryGetValue(dep, out string? depName))
+                    adjacency[name].Add(depName);
+            }
+        }
+
+        List<IReadOnlyList<string>> cycles = [];
+        HashSet<string> visited = new(StringComparer.Ordinal);
+        HashSet<string> stack = new(StringComparer.Ordinal);
+        List<string> path = [];
+
+        void Dfs(string node)
+        {
+            visited.Add(node);
+            stack.Add(node);
+            path.Add(node);
+
+            foreach (string neighbor in adjacency.GetValueOrDefault(node, []))
+            {
+                if (stack.Contains(neighbor))
+                {
+                    int cycleStart = path.IndexOf(neighbor);
+                    cycles.Add([.. path[cycleStart..], neighbor]);
+                }
+                else if (!visited.Contains(neighbor))
+                {
+                    Dfs(neighbor);
+                }
+            }
+
+            stack.Remove(node);
+            path.RemoveAt(path.Count - 1);
+        }
+
+        foreach (string node in adjacency.Keys)
+        {
+            if (!visited.Contains(node))
+                Dfs(node);
+        }
+
+        return cycles;
     }
 
     public void Dispose() => _workspace?.Dispose();

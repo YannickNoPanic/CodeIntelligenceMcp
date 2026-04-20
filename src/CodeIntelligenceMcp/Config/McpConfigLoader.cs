@@ -53,9 +53,27 @@ internal static class McpConfigLoader
                             $"Workspace '{workspace.Name}': rootPath not found at '{workspace.RootPath}'.");
                     break;
 
+                case "python":
+                    if (string.IsNullOrWhiteSpace(workspace.RootPath))
+                        throw new InvalidOperationException(
+                            $"Workspace '{workspace.Name}': 'rootPath' is required for type 'python'.");
+                    if (!Directory.Exists(workspace.RootPath))
+                        throw new DirectoryNotFoundException(
+                            $"Workspace '{workspace.Name}': rootPath not found at '{workspace.RootPath}'.");
+                    break;
+
+                case "javascript":
+                    if (string.IsNullOrWhiteSpace(workspace.RootPath))
+                        throw new InvalidOperationException(
+                            $"Workspace '{workspace.Name}': 'rootPath' is required for type 'javascript'.");
+                    if (!Directory.Exists(workspace.RootPath))
+                        throw new DirectoryNotFoundException(
+                            $"Workspace '{workspace.Name}': rootPath not found at '{workspace.RootPath}'.");
+                    break;
+
                 default:
                     throw new InvalidOperationException(
-                        $"Workspace '{workspace.Name}': unknown type '{workspace.Type}'. Expected 'dotnet', 'asp-classic', or 'powershell'.");
+                        $"Workspace '{workspace.Name}': unknown type '{workspace.Type}'. Expected 'dotnet', 'asp-classic', 'powershell', 'python', or 'javascript'.");
             }
         }
     }

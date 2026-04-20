@@ -31,6 +31,26 @@ public static class GitDiffService
             c.OldPath != c.Path ? c.OldPath : null))];
     }
 
+    public static IReadOnlyList<ChangedFile> GetChangedFilesIncludingWorkingTree(string repoPath, string baseBranch)
+    {
+        using Repository repo = new(repoPath);
+
+        Commit fromCommit = ResolveFromCommit(repo, baseBranch);
+
+        TreeChanges committed = repo.Diff.Compare<TreeChanges>(fromCommit.Tree, repo.Head.Tip.Tree);
+        TreeChanges uncommitted = repo.Diff.Compare<TreeChanges>(
+            repo.Head.Tip.Tree,
+            DiffTargets.WorkingDirectory | DiffTargets.Index);
+
+        Dictionary<string, ChangedFile> merged = new(StringComparer.Ordinal);
+        foreach (TreeEntryChanges c in committed)
+            merged[c.Path] = new ChangedFile(c.Path, MapStatus(c.Status), c.OldPath != c.Path ? c.OldPath : null);
+        foreach (TreeEntryChanges c in uncommitted)
+            merged[c.Path] = new ChangedFile(c.Path, MapStatus(c.Status), c.OldPath != c.Path ? c.OldPath : null);
+
+        return [.. merged.Values];
+    }
+
     public static string? GetFileContentAtBase(string repoPath, string baseBranch, string filePath)
     {
         using Repository repo = new(repoPath);

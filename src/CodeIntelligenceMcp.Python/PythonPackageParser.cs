@@ -7,9 +7,6 @@ namespace CodeIntelligenceMcp.Python;
 
 public static class PythonPackageParser
 {
-    private static readonly Regex PackageSpec =
-        new(@"^([A-Za-z0-9_\-\.]+)\s*([><=!~^,\s\d.]*)\s*$", RegexOptions.Compiled);
-
     public static PythonProjectInfo ParseProjectInfo(string rootPath)
     {
         string? projectName = null;

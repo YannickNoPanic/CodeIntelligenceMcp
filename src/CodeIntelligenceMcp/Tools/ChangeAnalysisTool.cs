@@ -18,6 +18,7 @@ public sealed class ChangeAnalysisTool(
         [Description("Base branch to compare against. Default 'main'.")] string? baseBranch = "main",
         [Description("Include public API signature changes for modified files. Default true.")] bool includeSignatures = true,
         [Description("Include Roslyn diagnostics scoped to changed files. Default true.")] bool includeDiagnostics = true,
+        [Description("Also include uncommitted working-tree changes (staged + unstaged). Use before commit to preview the full impact. Default false.")] bool includeUncommitted = false,
         CancellationToken ct = default)
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
@@ -43,6 +44,7 @@ public sealed class ChangeAnalysisTool(
                 baseBranch ?? "main",
                 includeSignatures,
                 includeDiagnostics,
+                includeUncommitted,
                 ct);
 
             return Ok(analysis);

@@ -11,11 +11,6 @@ public static class JsFileParser
         new(@"^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*(\*)?\s*(\w+)\s*(?:<[^>]*>)?\s*\(",
             RegexOptions.Compiled | RegexOptions.Multiline);
 
-    // Arrow functions: export? const/let/var name = async? (
-    private static readonly Regex ArrowFunction =
-        new(@"^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[\w]+)\s*=>",
-            RegexOptions.Compiled | RegexOptions.Multiline);
-
     // Arrow function with explicit params: export? const name = async? (
     private static readonly Regex ArrowFunctionParen =
         new(@"^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(async\s+)?\(",
