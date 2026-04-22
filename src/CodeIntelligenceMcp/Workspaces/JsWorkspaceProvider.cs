@@ -1,10 +1,11 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using CodeIntelligenceMcp.Config;
+using Microsoft.Extensions.Logging;
 
 namespace CodeIntelligenceMcp.Workspaces;
 
-internal sealed class JsWorkspaceProvider(McpConfig config) : IWorkspaceProvider<JsIndex>
+internal sealed class JsWorkspaceProvider(McpConfig config, ILogger<JsWorkspaceProvider> logger) : IWorkspaceProvider<JsIndex>
 {
     private readonly ConcurrentDictionary<string, Lazy<Task<JsIndex>>> _loaded =
         new(StringComparer.Ordinal);
@@ -24,7 +25,12 @@ internal sealed class JsWorkspaceProvider(McpConfig config) : IWorkspaceProvider
                 .FirstOrDefault(w => w.Name == workspace && w.Type == "javascript");
 
             if (found?.RootPath is null)
+            {
+                logger.LogWarning("Workspace '{Workspace}' not found — known javascript workspaces: {Known}",
+                    workspace,
+                    string.Join(", ", config.Workspaces.Where(w => w.Type == "javascript").Select(w => w.Name)));
                 return null;
+            }
 
             ws = found;
         }
@@ -38,9 +44,10 @@ internal sealed class JsWorkspaceProvider(McpConfig config) : IWorkspaceProvider
         {
             return await lazy.Value;
         }
-        catch
+        catch (Exception ex)
         {
             _loaded.TryRemove(new KeyValuePair<string, Lazy<Task<JsIndex>>>(cacheKey, lazy));
+            logger.LogError(ex, "Failed to load javascript workspace '{Workspace}'", workspace);
             throw;
         }
     }
@@ -53,15 +60,16 @@ internal sealed class JsWorkspaceProvider(McpConfig config) : IWorkspaceProvider
         return _loaded.TryRemove(cacheKey, out _);
     }
 
-    private static Task<JsIndex> LoadAsync(WorkspaceConfig ws)
+    private Task<JsIndex> LoadAsync(WorkspaceConfig ws)
     {
         return Task.Run(() =>
         {
-            Console.Error.WriteLine($"[info] Loading javascript workspace '{ws.Name}'...");
+            logger.LogInformation("Loading javascript workspace '{Workspace}'...", ws.Name);
             Stopwatch sw = Stopwatch.StartNew();
-            JsIndex index = JsIndex.Build(ws.RootPath!, msg => Console.Error.WriteLine(msg));
+            JsIndex index = JsIndex.Build(ws.RootPath!, msg => logger.LogInformation("{Message}", msg));
             sw.Stop();
-            Console.Error.WriteLine($"[info] Workspace '{ws.Name}' loaded — {index.FileCount} files in {sw.Elapsed.TotalSeconds:F1}s");
+            logger.LogInformation("Workspace '{Workspace}' loaded — {FileCount} files in {Seconds:F1}s",
+                ws.Name, index.FileCount, sw.Elapsed.TotalSeconds);
             return index;
         });
     }

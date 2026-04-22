@@ -1,10 +1,11 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using CodeIntelligenceMcp.Config;
+using Microsoft.Extensions.Logging;
 
 namespace CodeIntelligenceMcp.Workspaces;
 
-internal sealed class AspWorkspaceProvider(McpConfig config) : IWorkspaceProvider<AspIndex>
+internal sealed class AspWorkspaceProvider(McpConfig config, ILogger<AspWorkspaceProvider> logger) : IWorkspaceProvider<AspIndex>
 {
     private readonly ConcurrentDictionary<string, Lazy<Task<AspIndex>>> _loaded =
         new(StringComparer.Ordinal);
@@ -24,7 +25,12 @@ internal sealed class AspWorkspaceProvider(McpConfig config) : IWorkspaceProvide
                 .FirstOrDefault(w => w.Name == workspace && w.Type == "asp-classic");
 
             if (found?.RootPath is null)
+            {
+                logger.LogWarning("Workspace '{Workspace}' not found — known asp-classic workspaces: {Known}",
+                    workspace,
+                    string.Join(", ", config.Workspaces.Where(w => w.Type == "asp-classic").Select(w => w.Name)));
                 return null;
+            }
 
             ws = found;
         }
@@ -38,9 +44,10 @@ internal sealed class AspWorkspaceProvider(McpConfig config) : IWorkspaceProvide
         {
             return await lazy.Value;
         }
-        catch
+        catch (Exception ex)
         {
             _loaded.TryRemove(new KeyValuePair<string, Lazy<Task<AspIndex>>>(cacheKey, lazy));
+            logger.LogError(ex, "Failed to load asp-classic workspace '{Workspace}'", workspace);
             throw;
         }
     }
@@ -53,15 +60,16 @@ internal sealed class AspWorkspaceProvider(McpConfig config) : IWorkspaceProvide
         return _loaded.TryRemove(cacheKey, out _);
     }
 
-    private static Task<AspIndex> LoadAsync(WorkspaceConfig ws)
+    private Task<AspIndex> LoadAsync(WorkspaceConfig ws)
     {
         return Task.Run(() =>
         {
-            Console.Error.WriteLine($"[info] Loading asp-classic workspace '{ws.Name}'...");
+            logger.LogInformation("Loading asp-classic workspace '{Workspace}'...", ws.Name);
             Stopwatch sw = Stopwatch.StartNew();
-            AspIndex index = AspIndex.Build(ws.RootPath!, msg => Console.Error.WriteLine(msg));
+            AspIndex index = AspIndex.Build(ws.RootPath!, msg => logger.LogInformation("{Message}", msg));
             sw.Stop();
-            Console.Error.WriteLine($"[info] Workspace '{ws.Name}' loaded — {index.FileCount} files in {sw.Elapsed.TotalSeconds:F1}s");
+            logger.LogInformation("Workspace '{Workspace}' loaded — {FileCount} files in {Seconds:F1}s",
+                ws.Name, index.FileCount, sw.Elapsed.TotalSeconds);
             return index;
         });
     }

@@ -11,25 +11,20 @@ No write operations, no file watchers, no hot reload.
 
 ---
 
-## Tool Use Priority
+## Commands
 
-When this MCP server is attached, use tools in this order — do not read files directly:
-
-1. **`get_codebase_wiki`** — call first in any session to understand structure and violations
-2. **`analyze_changes`** — call next if on a feature branch (replaces reading git diffs manually)
-3. Drill down with `find_types`, `get_type`, `find_violations`, `get_diagnostics` as needed
-
-See `docs/TOOLS.md` for full reference on all tools.
+```bash
+dotnet build src/CodeIntelligenceMcp                         # build the server
+dotnet test tests/CodeIntelligenceMcp.Tests                  # run unit tests
+dotnet run --project src/CodeIntelligenceMcp --no-launch-profile -c Release --no-build  # run server (stdio)
+```
 
 ---
 
-## Navigation
+## Reference docs
 
-- **TASK.md** — full specification: all tool signatures, output contracts, implementation notes
-- **PLAN.md** — phased implementation checklist; read this to know current build state
-
-At the start of every session: read PLAN.md to find the first unchecked phase, then read
-the relevant sections of TASK.md for the spec of what to build.
+- **TASK.md** — full tool signatures and output contracts
+- **PLAN.md** — implementation history (all phases complete)
 
 ---
 
@@ -53,7 +48,7 @@ Defined in `mcp-config.json` (root of repo). Paths are absolute — no variable 
 
 | Name | Type | Path |
 |---|---|---|
-| `datalake2` | `dotnet` | `C:/Git/Datalake2/Datalake2.sln` |
+| `datalake2` | `dotnet` | `C:/Git/Datalake2.0/Datalake2.sln` |
 | `datalake1` | `asp-classic` | `C:/Git/WR_Development_datalake_portal` |
 
 Clean Architecture projects for datalake2: `Datalake2.Core`, `Datalake2.Infrastructure`, `Datalake2` (web).

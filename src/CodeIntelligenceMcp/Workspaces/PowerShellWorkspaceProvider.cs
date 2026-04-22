@@ -1,10 +1,11 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using CodeIntelligenceMcp.Config;
+using Microsoft.Extensions.Logging;
 
 namespace CodeIntelligenceMcp.Workspaces;
 
-internal sealed class PowerShellWorkspaceProvider(McpConfig config) : IWorkspaceProvider<PowerShellIndex>
+internal sealed class PowerShellWorkspaceProvider(McpConfig config, ILogger<PowerShellWorkspaceProvider> logger) : IWorkspaceProvider<PowerShellIndex>
 {
     private readonly ConcurrentDictionary<string, Lazy<Task<PowerShellIndex>>> _loaded =
         new(StringComparer.Ordinal);
@@ -24,7 +25,12 @@ internal sealed class PowerShellWorkspaceProvider(McpConfig config) : IWorkspace
                 .FirstOrDefault(w => w.Name == workspace && w.Type == "powershell");
 
             if (found?.RootPath is null)
+            {
+                logger.LogWarning("Workspace '{Workspace}' not found — known powershell workspaces: {Known}",
+                    workspace,
+                    string.Join(", ", config.Workspaces.Where(w => w.Type == "powershell").Select(w => w.Name)));
                 return null;
+            }
 
             ws = found;
         }
@@ -38,9 +44,10 @@ internal sealed class PowerShellWorkspaceProvider(McpConfig config) : IWorkspace
         {
             return await lazy.Value;
         }
-        catch
+        catch (Exception ex)
         {
             _loaded.TryRemove(new KeyValuePair<string, Lazy<Task<PowerShellIndex>>>(cacheKey, lazy));
+            logger.LogError(ex, "Failed to load powershell workspace '{Workspace}'", workspace);
             throw;
         }
     }
@@ -53,15 +60,16 @@ internal sealed class PowerShellWorkspaceProvider(McpConfig config) : IWorkspace
         return _loaded.TryRemove(cacheKey, out _);
     }
 
-    private static Task<PowerShellIndex> LoadAsync(WorkspaceConfig ws)
+    private Task<PowerShellIndex> LoadAsync(WorkspaceConfig ws)
     {
         return Task.Run(() =>
         {
-            Console.Error.WriteLine($"[info] Loading powershell workspace '{ws.Name}'...");
+            logger.LogInformation("Loading powershell workspace '{Workspace}'...", ws.Name);
             Stopwatch sw = Stopwatch.StartNew();
-            PowerShellIndex index = PowerShellIndex.Build(ws.RootPath!, msg => Console.Error.WriteLine(msg));
+            PowerShellIndex index = PowerShellIndex.Build(ws.RootPath!, msg => logger.LogInformation("{Message}", msg));
             sw.Stop();
-            Console.Error.WriteLine($"[info] Workspace '{ws.Name}' loaded — {index.FileCount} files in {sw.Elapsed.TotalSeconds:F1}s");
+            logger.LogInformation("Workspace '{Workspace}' loaded — {FileCount} files in {Seconds:F1}s",
+                ws.Name, index.FileCount, sw.Elapsed.TotalSeconds);
             return index;
         });
     }

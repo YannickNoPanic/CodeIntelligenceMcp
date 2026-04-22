@@ -28,7 +28,7 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
         sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
         sb.AppendLine();
 
-        AppendProjectStructure(sb, allTypes, projectDirs);
+        AppendProjectStructure(sb, allTypes, projectDirs, focusArea);
 
         if (includePatterns)
             AppendPatterns(sb, focusArea);
@@ -45,7 +45,8 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
     private static void AppendProjectStructure(
         StringBuilder sb,
         IReadOnlyList<TypeSummary> types,
-        List<(string Name, string Dir)> projectDirs)
+        List<(string Name, string Dir)> projectDirs,
+        string? focusArea)
     {
         sb.AppendLine("## Project Structure");
         sb.AppendLine();
@@ -72,6 +73,8 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
             list.Add(type);
         }
 
+        bool detailed = focusArea is not null;
+
         foreach ((string projectName, List<TypeSummary> projectTypes) in typesByProject.OrderBy(kv => kv.Key))
         {
             sb.AppendLine($"### {projectName}");
@@ -82,19 +85,28 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
 
             foreach (var nsGroup in byNamespace)
             {
-                int classes = nsGroup.Count(t => t.Kind == "class");
-                int interfaces = nsGroup.Count(t => t.Kind == "interface");
-                int records = nsGroup.Count(t => t.Kind == "record");
-                int enums = nsGroup.Count(t => t.Kind == "enum");
+                if (detailed)
+                {
+                    sb.AppendLine($"  └─ {nsGroup.Key}/");
+                    foreach (TypeSummary t in nsGroup.OrderBy(t => t.Name))
+                        sb.AppendLine($"      - {t.Name} ({t.Kind})");
+                }
+                else
+                {
+                    int classes = nsGroup.Count(t => t.Kind == "class");
+                    int interfaces = nsGroup.Count(t => t.Kind == "interface");
+                    int records = nsGroup.Count(t => t.Kind == "record");
+                    int enums = nsGroup.Count(t => t.Kind == "enum");
 
-                var parts = new List<string>();
-                if (classes > 0) parts.Add($"{classes} class{(classes == 1 ? "" : "es")}");
-                if (interfaces > 0) parts.Add($"{interfaces} interface{(interfaces == 1 ? "" : "s")}");
-                if (records > 0) parts.Add($"{records} record{(records == 1 ? "" : "s")}");
-                if (enums > 0) parts.Add($"{enums} enum{(enums == 1 ? "" : "s")}");
+                    var parts = new List<string>();
+                    if (classes > 0) parts.Add($"{classes} class{(classes == 1 ? "" : "es")}");
+                    if (interfaces > 0) parts.Add($"{interfaces} interface{(interfaces == 1 ? "" : "s")}");
+                    if (records > 0) parts.Add($"{records} record{(records == 1 ? "" : "s")}");
+                    if (enums > 0) parts.Add($"{enums} enum{(enums == 1 ? "" : "s")}");
 
-                string summary = string.Join(", ", parts);
-                sb.AppendLine($"  └─ {nsGroup.Key}/ [{summary}]");
+                    string summary = string.Join(", ", parts);
+                    sb.AppendLine($"  └─ {nsGroup.Key}/ [{summary}]");
+                }
             }
 
             sb.AppendLine();
