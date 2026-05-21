@@ -15,13 +15,15 @@ Supports five workspace types: **.NET/C#** (Roslyn), **Classic ASP/VBScript**, *
 
 ## Setup
 
-**1. Clone and build**
+**1. Clone and publish**
 
 ```bash
 git clone https://github.com/YannickNoPanic/CodeIntelligenceMcp.git
 cd CodeIntelligenceMcp
-dotnet build src/CodeIntelligenceMcp -c Release
+dotnet publish src/CodeIntelligenceMcp -c Release -r win-x64 --self-contained false -o publish
 ```
+
+This produces a standalone `publish/CodeIntelligenceMcp.exe`. Using a published exe is strongly recommended over `dotnet run` — it avoids build-output locking when multiple Claude Code sessions run in parallel and starts faster.
 
 **2. Configure workspaces**
 
@@ -75,22 +77,27 @@ Add to `~/.claude/settings.json` (global, works across all projects):
   "mcpServers": {
     "code-intelligence": {
       "type": "stdio",
-      "command": "dotnet",
-      "args": [
-        "run",
-        "--project",
-        "C:/path/to/CodeIntelligenceMcp/src/CodeIntelligenceMcp",
-        "--no-launch-profile",
-        "-c",
-        "Release",
-        "--no-build"
-      ]
+      "command": "C:/path/to/CodeIntelligenceMcp/publish/CodeIntelligenceMcp.exe"
     }
   }
 }
 ```
 
-Claude Code spawns a fresh server process per session. No separate process to manage.
+Point `command` at the published exe from step 1. Claude Code spawns a fresh server process per session — no separate process to manage.
+
+> **Development alternative:** If you are actively modifying the server, you can use `dotnet run` instead:
+> ```json
+> {
+>   "mcpServers": {
+>     "code-intelligence": {
+>       "type": "stdio",
+>       "command": "dotnet",
+>       "args": ["run", "--project", "C:/path/to/CodeIntelligenceMcp/src/CodeIntelligenceMcp", "--no-launch-profile", "-c", "Release", "--no-build"]
+>     }
+>   }
+> }
+> ```
+> Re-run `dotnet build` after each change. Avoid using this when running multiple Claude sessions simultaneously.
 
 **3b. SSE mode (optional)**
 
@@ -223,15 +230,19 @@ The default port is `5100`. Override via `appsettings.json`:
 
 **Claude can't connect / MCP fails to start**
 
-Check the log file at `%TEMP%\CodeIntelligenceMcp.log`. Every session writes a `--- Session started ---` header followed by startup context. If the file is missing or has no new entry, the process never ran — verify `dotnet` is on PATH and the build output exists at `bin/Release/net10.0/`.
+Check the log file at `%TEMP%\CodeIntelligenceMcp.log`. Every session writes a `--- Session started ---` header followed by startup context. If the file is missing or has no new entry, the process never ran — verify the `command` path in `settings.json` points to the published exe and that `publish/CodeIntelligenceMcp.exe` exists. All errors and exceptions are written to this log file regardless of how the exe was started.
 
 **Workspace fails to load**
 
 The log will contain an `[ERR]` entry with the exception. Common causes: `.sln` file not found, `rootPath` directory missing, or MSBuild not installed. Fix the path in `mcp-config.json` and restart the session.
 
+**MSBuild.Framework assembly not found (Roslyn workspace fails)**
+
+Symptom in the log: `FileNotFoundException: Could not load file or assembly 'Microsoft.Build.Framework, Version=15.1.0.0'`. This means the `bin/Release` binaries were built against a different MSBuild version than the one currently installed. Fix: re-run the publish step and restart Claude Code. The published exe picks up the MSBuild assemblies from the SDK at publish time, so they stay in sync.
+
 **Multiple Claude sessions in the same folder**
 
-Supported — each session spawns its own server process and all write to the same shared log file.
+When using the published exe, multiple sessions are fully supported — each spawns its own independent process with no shared build-output directory. If you use `dotnet run --no-build` instead, sessions may conflict on the shared `bin/Release` directory; switch to the published exe to resolve this.
 
 **Port already in use (SSE mode)**
 

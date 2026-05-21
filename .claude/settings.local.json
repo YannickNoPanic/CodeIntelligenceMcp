@@ -32,7 +32,20 @@
       "mcp__code-intelligence__get_codebase_wiki",
       "mcp__code-intelligence__find_types",
       "mcp__code-intelligence__get_diagnostics",
-      "mcp__code-intelligence__analyze_changes"
+      "mcp__code-intelligence__analyze_changes",
+      "Bash(timeout 10 dotnet run --project src/CodeIntelligenceMcp --no-launch-profile -c Release --no-build)",
+      "Bash(python -c \"import sys,json; [print\\(json.dumps\\(json.loads\\(l\\), indent=2\\)\\) for l in sys.stdin]\")",
+      "Bash(dotnet --version)",
+      "Bash(dotnet run *)",
+      "mcp__code-intelligence__refresh_workspace",
+      "mcp__code-intelligence__find_dead_code",
+      "mcp__code-intelligence__scan_all_violations",
+      "mcp__code-intelligence__get_change_risk",
+      "mcp__code-intelligence__get_hotspots",
+      "mcp__code-intelligence__find_circular_dependencies",
+      "mcp__code-intelligence__find_violations",
+      "Bash(git add *)",
+      "Bash(git push *)"
     ]
   }
 }
