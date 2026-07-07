@@ -1,7 +1,7 @@
 namespace CodeIntelligenceMcp.Tools;
 
 [McpServerToolType]
-public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider)
+public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider, McpConfig config)
 {
     [McpServerTool(Name = "asp_get_file")]
     [Description("Get the full structure of a Classic ASP file: includes, subs, functions, variables, and VBScript blocks. Use instead of reading the file directly.")]
@@ -10,9 +10,9 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider)
         [Description("File path")] string filePath,
         CancellationToken ct = default)
     {
-        AspIndex? index = await aspProvider.GetAsync(workspace, ct);
+        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, config, "asp-classic", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         AspFileInfo? fileInfo = index.GetFile(filePath);
         if (fileInfo is null)
@@ -28,9 +28,9 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider)
         [Description("Symbol name to find")] string symbolName,
         CancellationToken ct = default)
     {
-        AspIndex? index = await aspProvider.GetAsync(workspace, ct);
+        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, config, "asp-classic", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         IReadOnlyList<(string FilePath, int LineNumber, string Kind, string Context)> results = index.FindSymbol(symbolName);
 
@@ -52,9 +52,9 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider)
         [Description("File path")] string filePath,
         CancellationToken ct = default)
     {
-        AspIndex? index = await aspProvider.GetAsync(workspace, ct);
+        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, config, "asp-classic", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         (IReadOnlyList<(string Path, string ResolvedPath, int Line, bool Exists)> direct,
          IReadOnlyList<(string Path, string ResolvedPath, int Depth)> transitive) = index.GetIncludes(filePath);
@@ -84,9 +84,9 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider)
         [Description("Search query (case-insensitive substring)")] string query,
         CancellationToken ct = default)
     {
-        AspIndex? index = await aspProvider.GetAsync(workspace, ct);
+        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, config, "asp-classic", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         IReadOnlyList<(string FilePath, int LineNumber, string Context)> results = index.Search(query);
 

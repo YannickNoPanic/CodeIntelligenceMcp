@@ -1,7 +1,7 @@
 namespace CodeIntelligenceMcp.Tools;
 
 [McpServerToolType]
-public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvider)
+public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvider, McpConfig config)
 {
     [McpServerTool(Name = "get_powershell_wiki")]
     [Description("Generate a compact overview of a PowerShell project: script structure, functions, module manifests, dependencies, and patterns.")]
@@ -12,9 +12,9 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
         [Description("Include metrics (script counts, function counts)")] bool includeMetrics = false,
         CancellationToken ct = default)
     {
-        PowerShellIndex? index = await psProvider.GetAsync(workspace, ct);
+        (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, config, "powershell", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         PowerShellWikiGenerator generator = new(index);
         return generator.Generate(focusArea, includePatterns, includeMetrics);
@@ -27,9 +27,9 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
         [Description("File path (absolute or relative to workspace root)")] string filePath,
         CancellationToken ct = default)
     {
-        PowerShellIndex? index = await psProvider.GetAsync(workspace, ct);
+        (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, config, "powershell", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         PowerShellFileInfo? fileInfo = index.GetFile(filePath);
         if (fileInfo is null)
@@ -45,9 +45,9 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
         [Description("Function name or partial name to search for")] string functionName,
         CancellationToken ct = default)
     {
-        PowerShellIndex? index = await psProvider.GetAsync(workspace, ct);
+        (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, config, "powershell", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         IReadOnlyList<(string FilePath, PowerShellFunctionInfo Function)> results =
             index.FindFunction(functionName);
@@ -80,9 +80,9 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
         [Description("Workspace name from mcp-config.json, or absolute path to a PS root directory for ad-hoc use")] string workspace,
         CancellationToken ct = default)
     {
-        PowerShellIndex? index = await psProvider.GetAsync(workspace, ct);
+        (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, config, "powershell", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         return ToolResponses.Ok(index.GetModules());
     }
@@ -94,9 +94,9 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
         [Description("Search term")] string query,
         CancellationToken ct = default)
     {
-        PowerShellIndex? index = await psProvider.GetAsync(workspace, ct);
+        (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, config, "powershell", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         IReadOnlyList<(string FilePath, int LineNumber, string Context)> results =
             index.Search(query);

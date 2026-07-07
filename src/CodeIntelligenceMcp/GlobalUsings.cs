@@ -2,6 +2,7 @@ global using System.ComponentModel;
 global using System.Text.Json;
 global using System.Text.Json.Serialization;
 global using CodeIntelligenceMcp.AspClassic;
+global using CodeIntelligenceMcp.Config;
 global using CodeIntelligenceMcp.AspClassic.Models;
 global using CodeIntelligenceMcp.JavaScript;
 global using CodeIntelligenceMcp.JavaScript.Models;

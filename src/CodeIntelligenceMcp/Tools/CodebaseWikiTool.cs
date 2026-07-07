@@ -3,7 +3,8 @@ namespace CodeIntelligenceMcp.Tools;
 [McpServerToolType]
 public sealed class CodebaseWikiTool(
     IWorkspaceProvider<RoslynWorkspaceIndex> roslynProvider,
-    CleanArchRegistry cleanArch)
+    CleanArchRegistry cleanArch,
+    McpConfig config)
 {
     [McpServerTool(Name = "get_codebase_wiki")]
     [Description("Generate a compact hierarchical overview of a .NET codebase: project structure, architectural patterns, health summary (violations), and optional metrics. Call this first in any session to understand what you are working with. When focusArea is set, violations and patterns are scoped to that namespace.")]
@@ -15,9 +16,9 @@ public sealed class CodebaseWikiTool(
         [Description("Include metrics (type counts, file counts, test project count)")] bool includeMetrics = false,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         CleanArchitectureNames configured = cleanArch.Config.GetValueOrDefault(workspace, new CleanArchitectureNames("", "", ""));
         CleanArchitectureNames ca = string.IsNullOrEmpty(configured.CoreProject) ? index.CleanArchitecture : configured;

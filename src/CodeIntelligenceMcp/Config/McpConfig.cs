@@ -1,12 +1,12 @@
 namespace CodeIntelligenceMcp.Config;
 
-internal sealed record McpConfig
+public sealed record McpConfig
 {
     [JsonPropertyName("workspaces")]
     public List<WorkspaceConfig> Workspaces { get; init; } = [];
 }
 
-internal sealed record WorkspaceConfig
+public sealed record WorkspaceConfig
 {
     [JsonPropertyName("name")]
     public string Name { get; init; } = string.Empty;
@@ -24,7 +24,7 @@ internal sealed record WorkspaceConfig
     public CleanArchitectureConfig? CleanArchitecture { get; init; }
 }
 
-internal sealed record CleanArchitectureConfig
+public sealed record CleanArchitectureConfig
 {
     [JsonPropertyName("coreProject")]
     public string CoreProject { get; init; } = string.Empty;

@@ -1,7 +1,7 @@
 namespace CodeIntelligenceMcp.Tools;
 
 [McpServerToolType]
-public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
+public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider, McpConfig config)
 {
     [McpServerTool(Name = "get_js_wiki")]
     [Description("Generate a compact overview of a JavaScript/TypeScript project: modules, components, exports, imports, dependencies, and framework patterns.")]
@@ -12,9 +12,9 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
         [Description("Include metrics (file counts, function/class/interface counts)")] bool includeMetrics = false,
         CancellationToken ct = default)
     {
-        JsIndex? index = await jsProvider.GetAsync(workspace, ct);
+        (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, config, "javascript", workspace, ct);
         if (index is null)
-            return ToolResponses.Err("workspace not found");
+            return error!;
 
         JsWikiGenerator generator = new(index);
         return generator.Generate(focusArea, includePatterns, includeMetrics);
@@ -27,9 +27,9 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
         [Description("File path (absolute or relative to workspace root)")] string filePath,
         CancellationToken ct = default)
     {
-        JsIndex? index = await jsProvider.GetAsync(workspace, ct);
+        (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, config, "javascript", workspace, ct);
         if (index is null)
-            return ToolResponses.Err("workspace not found");
+            return error!;
 
         // Try as Vue file first
         if (filePath.EndsWith(".vue", StringComparison.OrdinalIgnoreCase))
@@ -53,9 +53,9 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
         [Description("Function name or partial name (case-insensitive)")] string functionName,
         CancellationToken ct = default)
     {
-        JsIndex? index = await jsProvider.GetAsync(workspace, ct);
+        (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, config, "javascript", workspace, ct);
         if (index is null)
-            return ToolResponses.Err("workspace not found");
+            return error!;
 
         IReadOnlyList<(string FilePath, JsFunctionInfo Function)> results = index.FindFunction(functionName);
 
@@ -81,9 +81,9 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
         [Description("Class name or partial name (case-insensitive)")] string className,
         CancellationToken ct = default)
     {
-        JsIndex? index = await jsProvider.GetAsync(workspace, ct);
+        (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, config, "javascript", workspace, ct);
         if (index is null)
-            return ToolResponses.Err("workspace not found");
+            return error!;
 
         IReadOnlyList<(string FilePath, JsClassInfo Class)> results = index.FindClass(className);
 
@@ -109,9 +109,9 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
         [Description("Search term")] string query,
         CancellationToken ct = default)
     {
-        JsIndex? index = await jsProvider.GetAsync(workspace, ct);
+        (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, config, "javascript", workspace, ct);
         if (index is null)
-            return ToolResponses.Err("workspace not found");
+            return error!;
 
         IReadOnlyList<(string FilePath, int Line, string Context)> results = index.Search(query);
 

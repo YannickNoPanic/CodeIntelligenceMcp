@@ -4,7 +4,8 @@ namespace CodeIntelligenceMcp.Tools;
 public sealed class CSharpTools(
     IWorkspaceProvider<RoslynWorkspaceIndex> roslynProvider,
     CleanArchRegistry cleanArch,
-    SolutionPathRegistry solutionPaths)
+    SolutionPathRegistry solutionPaths,
+    McpConfig config)
 {
     private CleanArchitectureNames ResolveCleanArch(string workspace, RoslynWorkspaceIndex index)
     {
@@ -34,9 +35,9 @@ public sealed class CSharpTools(
         [Description("Simple or fully qualified type name")] string typeName,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         if (AmbiguityError(index, typeName) is string ambiguous)
             return ambiguous;
@@ -59,9 +60,9 @@ public sealed class CSharpTools(
         [Description("Type kind: class, interface, record, or enum")] string? kind = null,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         IReadOnlyList<TypeSummary> results = index.FindTypes(nameContains, @namespace, implementsInterface, hasAttribute, kind);
         return ToolResponses.Ok(results);
@@ -75,9 +76,9 @@ public sealed class CSharpTools(
         [Description("Method name")] string methodName,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         if (AmbiguityError(index, typeName) is string ambiguous)
             return ambiguous;
@@ -96,9 +97,9 @@ public sealed class CSharpTools(
         [Description("Interface name")] string interfaceName,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         IReadOnlyList<ImplementationSummary> results = index.FindImplementations(interfaceName);
         return ToolResponses.Ok(results);
@@ -111,9 +112,9 @@ public sealed class CSharpTools(
         [Description("Symbol name to find usages of")] string symbolName,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         if (AmbiguityError(index, symbolName) is string ambiguous)
             return ambiguous;
@@ -129,9 +130,9 @@ public sealed class CSharpTools(
         [Description("Type name")] string typeName,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         if (AmbiguityError(index, typeName) is string ambiguous)
             return ambiguous;
@@ -150,9 +151,9 @@ public sealed class CSharpTools(
         [Description("Namespace to inspect (exact or prefix)")] string @namespace,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         PublicSurface surface = index.GetPublicSurface(@namespace);
         return ToolResponses.Ok(surface);
@@ -164,9 +165,9 @@ public sealed class CSharpTools(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         ProjectDependency dep = index.GetProjectDependencies();
         return ToolResponses.Ok(dep);
@@ -179,9 +180,9 @@ public sealed class CSharpTools(
         [Description("Substring query (case-insensitive)")] string query,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         IReadOnlyList<SymbolSearchResult> results = index.SearchSymbol(query);
         return ToolResponses.Ok(results);
@@ -193,9 +194,9 @@ public sealed class CSharpTools(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
         PatternScanner scanner = new(index, ca);
@@ -209,9 +210,9 @@ public sealed class CSharpTools(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         return ToolResponses.Ok(index.GetTestCoverage());
     }
@@ -226,9 +227,9 @@ public sealed class CSharpTools(
         [Description("Sort by 'complexity' (default) or 'lines'")] string sortBy = "complexity",
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         ComplexityAnalyzer analyzer = new(index);
         IReadOnlyList<MethodComplexity> results = await analyzer.AnalyzeAsync(minComplexity, projectFilter, minLines, sortBy, ct: ct);
@@ -242,9 +243,9 @@ public sealed class CSharpTools(
         [Description("Maximum violations to include per rule (default 50, 0 = unlimited)")] int maxPerRule = 50,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
         ViolationDetector detector = new(index, ca);
@@ -287,9 +288,9 @@ public sealed class CSharpTools(
         [Description("Filter to a specific project name (substring match)")] string? projectFilter = null,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         IReadOnlyList<DeadCodeResult> results = await new ReferenceQueries(index).FindDeadCodeAsync(projectFilter, ct);
         return ToolResponses.Ok(results);
@@ -303,9 +304,9 @@ public sealed class CSharpTools(
         [Description("Method name to find callers of")] string methodName,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         if (AmbiguityError(index, typeName) is string ambiguous)
             return ambiguous;
@@ -322,9 +323,9 @@ public sealed class CSharpTools(
         [Description("Filter to a specific project name (substring match)")] string? projectFilter = null,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         IReadOnlyList<TypeCoupling> results = new CouplingAnalyzer(index).GetCoupling(projectFilter, minCoupling);
         return ToolResponses.Ok(results);
@@ -338,9 +339,9 @@ public sealed class CSharpTools(
         [Description("Filter to a specific project name (substring match)")] string? projectFilter = null,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         return ToolResponses.Ok(await new RiskAnalyzer(index).GetHotspotsAsync(topN, projectFilter, ct));
     }
@@ -351,9 +352,9 @@ public sealed class CSharpTools(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         IReadOnlyList<IReadOnlyList<string>> cycles = index.FindCircularDependencies();
         return ToolResponses.Ok(new { cycleCount = cycles.Count, cycles });
@@ -366,9 +367,9 @@ public sealed class CSharpTools(
         [Description("Type name to assess")] string typeName,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         if (AmbiguityError(index, typeName) is string ambiguous)
             return ambiguous;
@@ -388,9 +389,9 @@ public sealed class CSharpTools(
         [Description("Filter results to a specific project name (substring match on file path)")] string? projectFilter = null,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
         ViolationDetector detector = new(index, ca);
@@ -421,9 +422,9 @@ public sealed class CSharpTools(
         [Description("File path (relative to solution root or absolute)")] string filePath,
         CancellationToken ct = default)
     {
-        RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
         if (index is null)
-            return ToolResponses.Err($"workspace '{workspace}' not found");
+            return error!;
 
         string solutionPath = solutionPaths.Paths.GetValueOrDefault(workspace, "");
         string solutionDir = Path.GetDirectoryName(solutionPath) ?? "";

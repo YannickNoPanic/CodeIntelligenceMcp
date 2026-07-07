@@ -11,8 +11,20 @@ public static class RoslynLoader
     {
         lock (RegisterLock)
         {
-            if (!MSBuildLocator.IsRegistered)
+            if (MSBuildLocator.IsRegistered)
+                return;
+
+            try
+            {
                 MSBuildLocator.RegisterDefaults();
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new WorkspaceLoadException(
+                    "No compatible MSBuild/.NET SDK found on this machine.",
+                    "Install the .NET 10 SDK (or pin a version with global.json). Visual Studio MSBuild also works.",
+                    [ex.Message]);
+            }
         }
     }
 
@@ -32,7 +44,23 @@ public static class RoslynLoader
                 loadWarnings.Add($"[{e.Diagnostic.Kind}] {e.Diagnostic.Message}");
         });
 
-        Microsoft.CodeAnalysis.Solution solution = await workspace.OpenSolutionAsync(solutionPath, cancellationToken: cancellationToken);
+        Microsoft.CodeAnalysis.Solution solution;
+        try
+        {
+            solution = await workspace.OpenSolutionAsync(solutionPath, cancellationToken: cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new WorkspaceLoadException(
+                $"Failed to load solution '{solutionPath}': {ex.Message}",
+                "Check that the solution builds with 'dotnet build' on this machine.",
+                [.. loadWarnings.Take(3)]);
+        }
+
         RoslynWorkspaceIndex index = await RoslynWorkspaceIndex.BuildAsync(workspace, solution, cleanArch, loadWarnings, cancellationToken);
         index.Fingerprint = Git.GitDiffService.ComputeFingerprint(solutionPath);
         return index;
