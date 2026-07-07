@@ -73,6 +73,17 @@ internal abstract class WorkspaceProviderBase<TIndex>(McpConfig config, ILogger 
         }
     }
 
+    public bool IsLoaded(string workspace)
+    {
+        string cacheKey = Path.IsPathRooted(workspace)
+            ? workspace.Replace('\\', '/')
+            : workspace;
+
+        return _loaded.TryGetValue(cacheKey, out Lazy<Task<TIndex>>? lazy)
+            && lazy.IsValueCreated
+            && lazy.Value.IsCompletedSuccessfully;
+    }
+
     public bool Invalidate(string workspace)
     {
         string cacheKey = Path.IsPathRooted(workspace)

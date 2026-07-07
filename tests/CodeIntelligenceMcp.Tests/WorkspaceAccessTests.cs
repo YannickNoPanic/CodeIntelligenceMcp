@@ -12,12 +12,14 @@ public sealed class WorkspaceAccessTests
     {
         public Task<object?> GetAsync(string workspace, CancellationToken ct = default) => Task.FromException<object?>(ex);
         public bool Invalidate(string workspace) => false;
+        public bool IsLoaded(string workspace) => false;
     }
 
     private sealed class NullProvider : IWorkspaceProvider<object>
     {
         public Task<object?> GetAsync(string workspace, CancellationToken ct = default) => Task.FromResult<object?>(null);
         public bool Invalidate(string workspace) => false;
+        public bool IsLoaded(string workspace) => false;
     }
 
     private static McpConfig ConfigWith(params (string Name, string Type)[] workspaces) => new()

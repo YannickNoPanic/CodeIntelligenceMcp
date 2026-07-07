@@ -4,4 +4,5 @@ public interface IWorkspaceProvider<TIndex>
 {
     Task<TIndex?> GetAsync(string workspace, CancellationToken ct = default);
     bool Invalidate(string workspace);
+    bool IsLoaded(string workspace);
 }
