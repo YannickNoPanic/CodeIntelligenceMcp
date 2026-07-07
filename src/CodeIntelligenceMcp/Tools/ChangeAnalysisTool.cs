@@ -6,11 +6,6 @@ public sealed class ChangeAnalysisTool(
     CleanArchRegistry cleanArch,
     SolutionPathRegistry solutionPaths)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-
-    private static string Ok(object result) => JsonSerializer.Serialize(result, JsonOptions);
-    private static string Err(string message) => JsonSerializer.Serialize(new { error = message });
-
     [McpServerTool(Name = "analyze_changes")]
     [Description("Analyze the git diff between current HEAD and a base branch. Returns changed files with affected types, public API signature changes, architectural violations, and diagnostics scoped to changed code. Use as the first call when reviewing a branch before merge, or after a refactor to check for regressions.")]
     public async Task<string> AnalyzeChanges(
@@ -23,14 +18,14 @@ public sealed class ChangeAnalysisTool(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         string solutionPath = Path.IsPathRooted(workspace)
             ? workspace.Replace('\\', '/')
             : solutionPaths.Paths.GetValueOrDefault(workspace, string.Empty);
 
         if (string.IsNullOrEmpty(solutionPath))
-            return Err($"solution path not found for workspace '{workspace}'");
+            return ToolResponses.Err($"solution path not found for workspace '{workspace}'");
 
         // This tool reads the git diff live from disk; the index must match that same state,
         // otherwise violations and diagnostics describe a different snapshot than the diff.
@@ -39,7 +34,7 @@ public sealed class ChangeAnalysisTool(
             roslynProvider.Invalidate(workspace);
             index = await roslynProvider.GetAsync(workspace, ct);
             if (index is null)
-                return Err($"workspace '{workspace}' could not be re-indexed after refresh");
+                return ToolResponses.Err($"workspace '{workspace}' could not be re-indexed after refresh");
         }
 
         CleanArchitectureNames configured = cleanArch.Config.GetValueOrDefault(workspace, new CleanArchitectureNames("", "", ""));
@@ -57,15 +52,15 @@ public sealed class ChangeAnalysisTool(
                 includeUncommitted,
                 ct);
 
-            return Ok(analysis);
+            return ToolResponses.Ok(analysis);
         }
         catch (ArgumentException ex)
         {
-            return Err(ex.Message);
+            return ToolResponses.Err(ex.Message);
         }
         catch (InvalidOperationException ex)
         {
-            return Err(ex.Message);
+            return ToolResponses.Err(ex.Message);
         }
     }
 }

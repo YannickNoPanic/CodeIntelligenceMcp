@@ -17,7 +17,7 @@ public sealed class CodebaseWikiTool(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return System.Text.Json.JsonSerializer.Serialize(new { error = $"workspace '{workspace}' not found" });
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         CleanArchitectureNames configured = cleanArch.Config.GetValueOrDefault(workspace, new CleanArchitectureNames("", "", ""));
         CleanArchitectureNames ca = string.IsNullOrEmpty(configured.CoreProject) ? index.CleanArchitecture : configured;

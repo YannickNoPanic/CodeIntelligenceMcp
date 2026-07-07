@@ -3,11 +3,6 @@ namespace CodeIntelligenceMcp.Tools;
 [McpServerToolType]
 public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-
-    private static string Ok(object result) => JsonSerializer.Serialize(result, JsonOptions);
-    private static string Err(string message) => JsonSerializer.Serialize(new { error = message });
-
     [McpServerTool(Name = "sql_find_table")]
     [Description("Find all SQL queries that reference a given table across Classic ASP files. Returns operation type, signature, and columns used.")]
     public async Task<string> SqlFindTable(
@@ -17,7 +12,7 @@ public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider)
     {
         AspIndex? index = await aspProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err("SQL tools require an asp-classic workspace");
+            return ToolResponses.Err("SQL tools require an asp-classic workspace");
 
         IReadOnlyList<(string FilePath, SqlQueryInfo Query)> results = index.FindByTable(tableName);
 
@@ -30,7 +25,7 @@ public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider)
             columns = r.Query.Columns
         }).ToArray();
 
-        return Ok(mapped);
+        return ToolResponses.Ok(mapped);
     }
 
     [McpServerTool(Name = "sql_get_signatures")]
@@ -42,10 +37,10 @@ public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider)
     {
         AspIndex? index = await aspProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err("SQL tools require an asp-classic workspace");
+            return ToolResponses.Err("SQL tools require an asp-classic workspace");
 
         IReadOnlyList<SqlQueryInfo> results = index.GetFileQueries(filePath);
-        return Ok(results);
+        return ToolResponses.Ok(results);
     }
 
     [McpServerTool(Name = "sql_find_column")]
@@ -57,7 +52,7 @@ public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider)
     {
         AspIndex? index = await aspProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err("SQL tools require an asp-classic workspace");
+            return ToolResponses.Err("SQL tools require an asp-classic workspace");
 
         IReadOnlyList<(string FilePath, int LineNumber, string? TableName, string Operation, string Signature)> results =
             index.FindByColumn(columnName);
@@ -71,7 +66,7 @@ public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider)
             signature = r.Signature
         }).ToArray();
 
-        return Ok(mapped);
+        return ToolResponses.Ok(mapped);
     }
 
     [McpServerTool(Name = "sql_list_tables")]
@@ -82,7 +77,7 @@ public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider)
     {
         AspIndex? index = await aspProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err("SQL tools require an asp-classic workspace");
+            return ToolResponses.Err("SQL tools require an asp-classic workspace");
 
         IReadOnlyList<(string TableName, int UsageCount, IReadOnlyList<(string FilePath, int UsageCount)> Files)> results =
             index.ListTables();
@@ -94,6 +89,6 @@ public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider)
             files = r.Files.Select(f => new { filePath = f.FilePath, usageCount = f.UsageCount }).ToArray()
         }).ToArray();
 
-        return Ok(mapped);
+        return ToolResponses.Ok(mapped);
     }
 }

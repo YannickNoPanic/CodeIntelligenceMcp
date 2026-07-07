@@ -3,11 +3,6 @@ namespace CodeIntelligenceMcp.Tools;
 [McpServerToolType]
 public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-
-    private static string Ok(object result) => JsonSerializer.Serialize(result, JsonOptions);
-    private static string Err(string message) => JsonSerializer.Serialize(new { error = message });
-
     [McpServerTool(Name = "get_js_wiki")]
     [Description("Generate a compact overview of a JavaScript/TypeScript project: modules, components, exports, imports, dependencies, and framework patterns.")]
     public async Task<string> GetJsWiki(
@@ -19,7 +14,7 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
     {
         JsIndex? index = await jsProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err("workspace not found");
+            return ToolResponses.Err("workspace not found");
 
         JsWikiGenerator generator = new(index);
         return generator.Generate(focusArea, includePatterns, includeMetrics);
@@ -34,21 +29,21 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
     {
         JsIndex? index = await jsProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err("workspace not found");
+            return ToolResponses.Err("workspace not found");
 
         // Try as Vue file first
         if (filePath.EndsWith(".vue", StringComparison.OrdinalIgnoreCase))
         {
             VueSfcInfo? vueInfo = index.GetVueFile(filePath);
             if (vueInfo is not null)
-                return Ok(vueInfo);
+                return ToolResponses.Ok(vueInfo);
         }
 
         JsFileInfo? info = index.GetFile(filePath);
         if (info is null)
-            return Err("file not found");
+            return ToolResponses.Err("file not found");
 
-        return Ok(info);
+        return ToolResponses.Ok(info);
     }
 
     [McpServerTool(Name = "js_find_function")]
@@ -60,7 +55,7 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
     {
         JsIndex? index = await jsProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err("workspace not found");
+            return ToolResponses.Err("workspace not found");
 
         IReadOnlyList<(string FilePath, JsFunctionInfo Function)> results = index.FindFunction(functionName);
 
@@ -76,7 +71,7 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
             isGenerator = r.Function.IsGenerator
         }).ToArray();
 
-        return Ok(mapped);
+        return ToolResponses.Ok(mapped);
     }
 
     [McpServerTool(Name = "js_find_class")]
@@ -88,7 +83,7 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
     {
         JsIndex? index = await jsProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err("workspace not found");
+            return ToolResponses.Err("workspace not found");
 
         IReadOnlyList<(string FilePath, JsClassInfo Class)> results = index.FindClass(className);
 
@@ -104,7 +99,7 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
             methods = r.Class.Methods.Select(m => m.Name)
         }).ToArray();
 
-        return Ok(mapped);
+        return ToolResponses.Ok(mapped);
     }
 
     [McpServerTool(Name = "js_search")]
@@ -116,7 +111,7 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
     {
         JsIndex? index = await jsProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err("workspace not found");
+            return ToolResponses.Err("workspace not found");
 
         IReadOnlyList<(string FilePath, int Line, string Context)> results = index.Search(query);
 
@@ -127,6 +122,6 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider)
             context = r.Context
         }).ToArray();
 
-        return Ok(mapped);
+        return ToolResponses.Ok(mapped);
     }
 }

@@ -3,11 +3,6 @@ namespace CodeIntelligenceMcp.Tools;
 [McpServerToolType]
 public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvider)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-
-    private static string Ok(object result) => JsonSerializer.Serialize(result, JsonOptions);
-    private static string Err(string message) => JsonSerializer.Serialize(new { error = message });
-
     [McpServerTool(Name = "get_powershell_wiki")]
     [Description("Generate a compact overview of a PowerShell project: script structure, functions, module manifests, dependencies, and patterns.")]
     public async Task<string> GetPowerShellWiki(
@@ -19,7 +14,7 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
     {
         PowerShellIndex? index = await psProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         PowerShellWikiGenerator generator = new(index);
         return generator.Generate(focusArea, includePatterns, includeMetrics);
@@ -34,13 +29,13 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
     {
         PowerShellIndex? index = await psProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         PowerShellFileInfo? fileInfo = index.GetFile(filePath);
         if (fileInfo is null)
-            return Err("file not found");
+            return ToolResponses.Err("file not found");
 
-        return Ok(fileInfo);
+        return ToolResponses.Ok(fileInfo);
     }
 
     [McpServerTool(Name = "ps_find_function")]
@@ -52,7 +47,7 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
     {
         PowerShellIndex? index = await psProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         IReadOnlyList<(string FilePath, PowerShellFunctionInfo Function)> results =
             index.FindFunction(functionName);
@@ -76,7 +71,7 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
             })
         }).ToArray();
 
-        return Ok(mapped);
+        return ToolResponses.Ok(mapped);
     }
 
     [McpServerTool(Name = "ps_get_modules")]
@@ -87,9 +82,9 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
     {
         PowerShellIndex? index = await psProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
-        return Ok(index.GetModules());
+        return ToolResponses.Ok(index.GetModules());
     }
 
     [McpServerTool(Name = "ps_search")]
@@ -101,7 +96,7 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
     {
         PowerShellIndex? index = await psProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         IReadOnlyList<(string FilePath, int LineNumber, string Context)> results =
             index.Search(query);
@@ -113,6 +108,6 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
             context = r.Context
         }).ToArray();
 
-        return Ok(mapped);
+        return ToolResponses.Ok(mapped);
     }
 }

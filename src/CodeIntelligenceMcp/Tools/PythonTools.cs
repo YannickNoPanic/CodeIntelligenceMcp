@@ -3,11 +3,6 @@ namespace CodeIntelligenceMcp.Tools;
 [McpServerToolType]
 public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-
-    private static string Ok(object result) => JsonSerializer.Serialize(result, JsonOptions);
-    private static string Err(string message) => JsonSerializer.Serialize(new { error = message });
-
     [McpServerTool(Name = "get_python_wiki")]
     [Description("Generate a compact overview of a Python project: modules, classes, functions, imports, dependencies, and framework patterns.")]
     public async Task<string> GetPythonWiki(
@@ -19,7 +14,7 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider)
     {
         PythonIndex? index = await pythonProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err("workspace not found");
+            return ToolResponses.Err("workspace not found");
 
         PythonWikiGenerator generator = new(index);
         return generator.Generate(focusArea, includePatterns, includeMetrics);
@@ -34,13 +29,13 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider)
     {
         PythonIndex? index = await pythonProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err("workspace not found");
+            return ToolResponses.Err("workspace not found");
 
         PythonFileInfo? info = index.GetFile(filePath);
         if (info is null)
-            return Err("file not found");
+            return ToolResponses.Err("file not found");
 
-        return Ok(info);
+        return ToolResponses.Ok(info);
     }
 
     [McpServerTool(Name = "py_find_function")]
@@ -52,7 +47,7 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider)
     {
         PythonIndex? index = await pythonProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err("workspace not found");
+            return ToolResponses.Err("workspace not found");
 
         IReadOnlyList<(string FilePath, PythonFunctionInfo Function)> results = index.FindFunction(functionName);
 
@@ -74,7 +69,7 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider)
             returnTypeHint = r.Function.ReturnTypeHint
         }).ToArray();
 
-        return Ok(mapped);
+        return ToolResponses.Ok(mapped);
     }
 
     [McpServerTool(Name = "py_find_class")]
@@ -86,7 +81,7 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider)
     {
         PythonIndex? index = await pythonProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err("workspace not found");
+            return ToolResponses.Err("workspace not found");
 
         IReadOnlyList<(string FilePath, PythonClassInfo Class)> results = index.FindClass(className);
 
@@ -101,7 +96,7 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider)
             methods = r.Class.Methods.Select(m => m.Name)
         }).ToArray();
 
-        return Ok(mapped);
+        return ToolResponses.Ok(mapped);
     }
 
     [McpServerTool(Name = "py_search")]
@@ -113,7 +108,7 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider)
     {
         PythonIndex? index = await pythonProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err("workspace not found");
+            return ToolResponses.Err("workspace not found");
 
         IReadOnlyList<(string FilePath, int Line, string Context)> results = index.Search(query);
 
@@ -124,6 +119,6 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider)
             context = r.Context
         }).ToArray();
 
-        return Ok(mapped);
+        return ToolResponses.Ok(mapped);
     }
 }

@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\src\CodeIntelligenceMcp.PowerShell\CodeIntelligenceMcp.PowerShell.csproj" />
     <ProjectReference Include="..\..\src\CodeIntelligenceMcp.JavaScript\CodeIntelligenceMcp.JavaScript.csproj" />
     <ProjectReference Include="..\..\src\CodeIntelligenceMcp.Python\CodeIntelligenceMcp.Python.csproj" />
+    <ProjectReference Include="..\..\src\CodeIntelligenceMcp\CodeIntelligenceMcp.csproj" />
   </ItemGroup>
 
 </Project>

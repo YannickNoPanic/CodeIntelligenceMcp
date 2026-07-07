@@ -3,11 +3,6 @@ namespace CodeIntelligenceMcp.Tools;
 [McpServerToolType]
 public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-
-    private static string Ok(object result) => JsonSerializer.Serialize(result, JsonOptions);
-    private static string Err(string message) => JsonSerializer.Serialize(new { error = message });
-
     [McpServerTool(Name = "asp_get_file")]
     [Description("Get the full structure of a Classic ASP file: includes, subs, functions, variables, and VBScript blocks. Use instead of reading the file directly.")]
     public async Task<string> AspGetFile(
@@ -17,13 +12,13 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider)
     {
         AspIndex? index = await aspProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         AspFileInfo? fileInfo = index.GetFile(filePath);
         if (fileInfo is null)
-            return Err("file not found");
+            return ToolResponses.Err("file not found");
 
-        return Ok(fileInfo);
+        return ToolResponses.Ok(fileInfo);
     }
 
     [McpServerTool(Name = "asp_find_symbol")]
@@ -35,7 +30,7 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider)
     {
         AspIndex? index = await aspProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         IReadOnlyList<(string FilePath, int LineNumber, string Kind, string Context)> results = index.FindSymbol(symbolName);
 
@@ -47,7 +42,7 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider)
             context = r.Context
         }).ToArray();
 
-        return Ok(mapped);
+        return ToolResponses.Ok(mapped);
     }
 
     [McpServerTool(Name = "asp_get_includes")]
@@ -59,7 +54,7 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider)
     {
         AspIndex? index = await aspProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         (IReadOnlyList<(string Path, string ResolvedPath, int Line, bool Exists)> direct,
          IReadOnlyList<(string Path, string ResolvedPath, int Depth)> transitive) = index.GetIncludes(filePath);
@@ -79,7 +74,7 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider)
             depth = i.Depth
         }).ToArray();
 
-        return Ok(new { filePath, includes = mappedDirect, transitiveIncludes = mappedTransitive });
+        return ToolResponses.Ok(new { filePath, includes = mappedDirect, transitiveIncludes = mappedTransitive });
     }
 
     [McpServerTool(Name = "asp_search")]
@@ -91,7 +86,7 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider)
     {
         AspIndex? index = await aspProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         IReadOnlyList<(string FilePath, int LineNumber, string Context)> results = index.Search(query);
 
@@ -102,6 +97,6 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider)
             context = r.Context
         }).ToArray();
 
-        return Ok(mapped);
+        return ToolResponses.Ok(mapped);
     }
 }

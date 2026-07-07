@@ -6,11 +6,6 @@ public sealed class CSharpTools(
     CleanArchRegistry cleanArch,
     SolutionPathRegistry solutionPaths)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-
-    private static string Ok(object result) => JsonSerializer.Serialize(result, JsonOptions);
-    private static string Err(string message) => JsonSerializer.Serialize(new { error = message });
-
     private CleanArchitectureNames ResolveCleanArch(string workspace, RoslynWorkspaceIndex index)
     {
         CleanArchitectureNames configured = cleanArch.Config.GetValueOrDefault(workspace, new CleanArchitectureNames("", "", ""));
@@ -29,7 +24,7 @@ public sealed class CSharpTools(
         {
             error = $"ambiguous type name '{typeName}' — use a fully qualified name",
             candidates
-        }, JsonOptions);
+        }, ToolResponses.JsonOptions);
     }
 
     [McpServerTool(Name = "get_type")]
@@ -41,16 +36,16 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         if (AmbiguityError(index, typeName) is string ambiguous)
             return ambiguous;
 
         TypeInfo? typeInfo = index.GetType(typeName);
         if (typeInfo is null)
-            return Err("type not found");
+            return ToolResponses.Err("type not found");
 
-        return Ok(typeInfo);
+        return ToolResponses.Ok(typeInfo);
     }
 
     [McpServerTool(Name = "find_types")]
@@ -66,10 +61,10 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         IReadOnlyList<TypeSummary> results = index.FindTypes(nameContains, @namespace, implementsInterface, hasAttribute, kind);
-        return Ok(results);
+        return ToolResponses.Ok(results);
     }
 
     [McpServerTool(Name = "get_method")]
@@ -82,16 +77,16 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         if (AmbiguityError(index, typeName) is string ambiguous)
             return ambiguous;
 
         MethodInfo? methodInfo = index.GetMethod(typeName, methodName);
         if (methodInfo is null)
-            return Err("method not found");
+            return ToolResponses.Err("method not found");
 
-        return Ok(methodInfo);
+        return ToolResponses.Ok(methodInfo);
     }
 
     [McpServerTool(Name = "find_implementations")]
@@ -103,10 +98,10 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         IReadOnlyList<ImplementationSummary> results = index.FindImplementations(interfaceName);
-        return Ok(results);
+        return ToolResponses.Ok(results);
     }
 
     [McpServerTool(Name = "find_usages")]
@@ -118,13 +113,13 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         if (AmbiguityError(index, symbolName) is string ambiguous)
             return ambiguous;
 
         IReadOnlyList<UsageResult> results = await new ReferenceQueries(index).FindUsagesAsync(symbolName, ct);
-        return Ok(results);
+        return ToolResponses.Ok(results);
     }
 
     [McpServerTool(Name = "get_dependencies")]
@@ -136,16 +131,16 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         if (AmbiguityError(index, typeName) is string ambiguous)
             return ambiguous;
 
         DependencyInfo? depInfo = index.GetDependencies(typeName);
         if (depInfo is null)
-            return Err("type not found");
+            return ToolResponses.Err("type not found");
 
-        return Ok(depInfo);
+        return ToolResponses.Ok(depInfo);
     }
 
     [McpServerTool(Name = "get_public_surface")]
@@ -157,10 +152,10 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         PublicSurface surface = index.GetPublicSurface(@namespace);
-        return Ok(surface);
+        return ToolResponses.Ok(surface);
     }
 
     [McpServerTool(Name = "get_project_dependencies")]
@@ -171,10 +166,10 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         ProjectDependency dep = index.GetProjectDependencies();
-        return Ok(dep);
+        return ToolResponses.Ok(dep);
     }
 
     [McpServerTool(Name = "search_symbol")]
@@ -186,10 +181,10 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         IReadOnlyList<SymbolSearchResult> results = index.SearchSymbol(query);
-        return Ok(results);
+        return ToolResponses.Ok(results);
     }
 
     [McpServerTool(Name = "scan_patterns")]
@@ -200,12 +195,12 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
         PatternScanner scanner = new(index, ca);
         PatternSummary summary = await scanner.ScanAsync(ct);
-        return Ok(summary);
+        return ToolResponses.Ok(summary);
     }
 
     [McpServerTool(Name = "get_test_coverage")]
@@ -216,9 +211,9 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
-        return Ok(index.GetTestCoverage());
+        return ToolResponses.Ok(index.GetTestCoverage());
     }
 
     [McpServerTool(Name = "get_complexity")]
@@ -233,11 +228,11 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         ComplexityAnalyzer analyzer = new(index);
         IReadOnlyList<MethodComplexity> results = await analyzer.AnalyzeAsync(minComplexity, projectFilter, minLines, sortBy, ct: ct);
-        return Ok(results);
+        return ToolResponses.Ok(results);
     }
 
     [McpServerTool(Name = "scan_all_violations")]
@@ -249,7 +244,7 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
         ViolationDetector detector = new(index, ca);
@@ -279,7 +274,7 @@ public sealed class CSharpTools(
             }
         }
 
-        return Ok(results
+        return ToolResponses.Ok(results
             .OrderByDescending(r => r.Count)
             .Select(r => new { rule = r.Rule, count = r.Count, violations = r.Violations })
             .ToList());
@@ -294,10 +289,10 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         IReadOnlyList<DeadCodeResult> results = await new ReferenceQueries(index).FindDeadCodeAsync(projectFilter, ct);
-        return Ok(results);
+        return ToolResponses.Ok(results);
     }
 
     [McpServerTool(Name = "find_callers")]
@@ -310,13 +305,13 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         if (AmbiguityError(index, typeName) is string ambiguous)
             return ambiguous;
 
         IReadOnlyList<CallerResult> results = await new ReferenceQueries(index).FindCallersAsync(typeName, methodName, ct);
-        return Ok(results);
+        return ToolResponses.Ok(results);
     }
 
     [McpServerTool(Name = "get_coupling")]
@@ -329,10 +324,10 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         IReadOnlyList<TypeCoupling> results = new CouplingAnalyzer(index).GetCoupling(projectFilter, minCoupling);
-        return Ok(results);
+        return ToolResponses.Ok(results);
     }
 
     [McpServerTool(Name = "get_hotspots")]
@@ -345,9 +340,9 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
-        return Ok(await new RiskAnalyzer(index).GetHotspotsAsync(topN, projectFilter, ct));
+        return ToolResponses.Ok(await new RiskAnalyzer(index).GetHotspotsAsync(topN, projectFilter, ct));
     }
 
     [McpServerTool(Name = "find_circular_dependencies")]
@@ -358,10 +353,10 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         IReadOnlyList<IReadOnlyList<string>> cycles = index.FindCircularDependencies();
-        return Ok(new { cycleCount = cycles.Count, cycles });
+        return ToolResponses.Ok(new { cycleCount = cycles.Count, cycles });
     }
 
     [McpServerTool(Name = "get_change_risk")]
@@ -373,16 +368,16 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         if (AmbiguityError(index, typeName) is string ambiguous)
             return ambiguous;
 
         ChangeRiskResult? result = await new RiskAnalyzer(index).GetChangeRiskAsync(typeName, ct);
         if (result is null)
-            return Err("type not found");
+            return ToolResponses.Err("type not found");
 
-        return Ok(result);
+        return ToolResponses.Ok(result);
     }
 
     [McpServerTool(Name = "find_violations")]
@@ -395,7 +390,7 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
         ViolationDetector detector = new(index, ca);
@@ -411,11 +406,11 @@ public sealed class CSharpTools(
                     || (v.TypeName?.Contains(projectFilter, StringComparison.OrdinalIgnoreCase) == true))];
             }
 
-            return Ok(violations);
+            return ToolResponses.Ok(violations);
         }
         catch (ArgumentException ex)
         {
-            return Err(ex.Message);
+            return ToolResponses.Err(ex.Message);
         }
     }
 
@@ -428,7 +423,7 @@ public sealed class CSharpTools(
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         string solutionPath = solutionPaths.Paths.GetValueOrDefault(workspace, "");
         string solutionDir = Path.GetDirectoryName(solutionPath) ?? "";
@@ -438,10 +433,10 @@ public sealed class CSharpTools(
             : Path.GetFullPath(Path.Combine(solutionDir, filePath));
 
         if (!File.Exists(fullPath))
-            return Err($"file not found: {fullPath}");
+            return ToolResponses.Err($"file not found: {fullPath}");
 
         CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
         FileAnalysis analysis = FileAnalyzer.Analyze(fullPath, ca);
-        return Ok(analysis);
+        return ToolResponses.Ok(analysis);
     }
 }

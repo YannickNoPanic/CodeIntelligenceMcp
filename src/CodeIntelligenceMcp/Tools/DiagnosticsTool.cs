@@ -3,11 +3,6 @@ namespace CodeIntelligenceMcp.Tools;
 [McpServerToolType]
 public sealed class DiagnosticsTool(IWorkspaceProvider<RoslynWorkspaceIndex> roslynProvider)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-
-    private static string Ok(object result) => JsonSerializer.Serialize(result, JsonOptions);
-    private static string Err(string message) => JsonSerializer.Serialize(new { error = message });
-
     [McpServerTool(Name = "get_diagnostics")]
     [Description("Get Roslyn compiler diagnostics for a .NET workspace, grouped by diagnostic code. Use after a refactor to check for new warnings, or as a cleanup starting point. Start with severity 'warning' and filter to one project to reduce noise. Does not duplicate architectural rules from find_violations — covers CS/IDE/CA compiler output only.")]
     public async Task<string> GetDiagnostics(
@@ -19,7 +14,7 @@ public sealed class DiagnosticsTool(IWorkspaceProvider<RoslynWorkspaceIndex> ros
     {
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
-            return Err($"workspace '{workspace}' not found");
+            return ToolResponses.Err($"workspace '{workspace}' not found");
 
         IReadOnlyList<DiagnosticResult> diagnostics =
             await index.GetCompilerDiagnosticsAsync(project, severity, category, ct);
@@ -44,7 +39,7 @@ public sealed class DiagnosticsTool(IWorkspaceProvider<RoslynWorkspaceIndex> ros
             })
             .ToArray();
 
-        return Ok(new
+        return ToolResponses.Ok(new
         {
             workspace,
             filters = new { severity, project, category },
