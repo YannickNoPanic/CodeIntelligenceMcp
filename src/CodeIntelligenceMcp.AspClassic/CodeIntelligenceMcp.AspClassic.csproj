@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\CodeIntelligenceMcp.Common\CodeIntelligenceMcp.Common.csproj" />
     <ProjectReference Include="..\VBScript.Parser\VBScript.Parser.csproj" />
   </ItemGroup>
 

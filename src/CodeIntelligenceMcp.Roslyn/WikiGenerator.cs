@@ -5,13 +5,13 @@ namespace CodeIntelligenceMcp.Roslyn;
 
 public sealed class WikiGenerator(RoslynWorkspaceIndex index)
 {
-    public string Generate(
+    public async Task<string> GenerateAsync(
         string? focusArea = null,
         bool includePatterns = true,
         bool includeMetrics = false,
         bool includeViolations = true,
-        bool includeDiagnostics = true,
-        CleanArchitectureNames? cleanArch = null)
+        CleanArchitectureNames? cleanArch = null,
+        CancellationToken ct = default)
     {
         IReadOnlyList<TypeSummary> allTypes = index.FindTypes(@namespace: focusArea);
         ProjectDependency projectDep = index.GetProjectDependencies();
@@ -28,13 +28,21 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
         sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
         sb.AppendLine();
 
+        if (index.LoadWarnings.Count > 0)
+        {
+            sb.AppendLine($"**Load warnings**: {index.LoadWarnings.Count} — the index may be incomplete. First 3:");
+            foreach (string warning in index.LoadWarnings.Take(3))
+                sb.AppendLine($"  - {warning}");
+            sb.AppendLine();
+        }
+
         AppendProjectStructure(sb, allTypes, projectDirs, focusArea);
 
         if (includePatterns)
             AppendPatterns(sb, focusArea);
 
         if (includeViolations && cleanArch is not null)
-            AppendHealthSummary(sb, cleanArch, focusArea);
+            await AppendHealthSummaryAsync(sb, cleanArch, focusArea, ct);
 
         if (includeMetrics)
             AppendMetrics(sb, allTypes, projectDep);
@@ -176,28 +184,19 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
         }
     }
 
-    private void AppendHealthSummary(StringBuilder sb, CleanArchitectureNames cleanArch, string? focusArea)
+    private async Task AppendHealthSummaryAsync(StringBuilder sb, CleanArchitectureNames cleanArch, string? focusArea, CancellationToken ct)
     {
         sb.AppendLine("## Health Summary");
         sb.AppendLine();
 
         ViolationDetector detector = new(index, cleanArch);
-        string[] allRules =
-        [
-            "core-no-ef", "core-no-http", "core-no-azure",
-            "usecase-not-sealed", "dto-in-core", "use-case-not-thin", "layer-boundary",
-            "controller-not-thin",
-            "inline-viewmodel-razor", "business-logic-in-razor", "json-parsing-in-view", "blazor-injects-infra",
-            "missing-cancellation-token", "no-async-void",
-            "empty-catch", "throw-ex", "too-many-params"
-        ];
 
         bool anyViolation = false;
-        foreach (string rule in allRules)
+        foreach (string rule in ViolationDetector.AllRuleKeys)
         {
             try
             {
-                IReadOnlyList<ViolationResult> violations = detector.Detect(rule);
+                IReadOnlyList<ViolationResult> violations = await detector.DetectAsync(rule, ct);
                 if (!string.IsNullOrEmpty(focusArea))
                     violations = [.. violations.Where(v => v.FilePath.Contains(focusArea, StringComparison.OrdinalIgnoreCase))];
 
@@ -209,6 +208,10 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
                 foreach (ViolationResult v in violations.Take(3))
                     sb.AppendLine($"  - {Path.GetFileName(v.FilePath)}:{v.LineNumber} — {v.Description}");
                 sb.AppendLine();
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch
             {
@@ -224,7 +227,7 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
 
         // Complexity hotspots
         ComplexityAnalyzer complexityAnalyzer = new(index);
-        IReadOnlyList<MethodComplexity> hotspots = complexityAnalyzer.Analyze(minComplexity: 10);
+        IReadOnlyList<MethodComplexity> hotspots = await complexityAnalyzer.AnalyzeAsync(minComplexity: 10, ct: ct);
         if (!string.IsNullOrEmpty(focusArea))
             hotspots = [.. hotspots.Where(h => h.FilePath.Contains(focusArea, StringComparison.OrdinalIgnoreCase))];
 

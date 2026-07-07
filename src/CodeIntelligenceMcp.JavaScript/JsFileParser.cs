@@ -71,11 +71,16 @@ public static class JsFileParser
         var enums = new List<JsEnumInfo>();
         bool hasEsm = false;
         bool hasCjs = false;
+        bool inBlockComment = false;
 
         for (int i = 0; i < lines.Length; i++)
         {
             string rawLine = lines[i];
             string trimmed = rawLine.TrimStart();
+
+            // Strip /* ... */ comment content, tracking state across lines
+            if (inBlockComment || trimmed.Contains("/*", StringComparison.Ordinal))
+                trimmed = StripBlockComments(trimmed, ref inBlockComment).TrimStart();
 
             if (string.IsNullOrWhiteSpace(trimmed) ||
                 trimmed.StartsWith("//", StringComparison.Ordinal) ||
@@ -228,6 +233,43 @@ public static class JsFileParser
         };
 
         return new JsFileInfo(filePath, functions, classes, imports, exports, interfaces, typeAliases, enums, moduleType);
+    }
+
+    /// <summary>
+    /// Removes /* ... */ comment content from a line, updating cross-line comment state.
+    /// A /* opened without a closing */ on the same line sets inBlockComment so
+    /// subsequent lines are skipped until the line containing */.
+    /// </summary>
+    private static string StripBlockComments(string line, ref bool inBlockComment)
+    {
+        var sb = new StringBuilder();
+        int pos = 0;
+
+        while (pos < line.Length)
+        {
+            if (inBlockComment)
+            {
+                int close = line.IndexOf("*/", pos, StringComparison.Ordinal);
+                if (close < 0)
+                    return sb.ToString();
+                inBlockComment = false;
+                pos = close + 2;
+            }
+            else
+            {
+                int open = line.IndexOf("/*", pos, StringComparison.Ordinal);
+                if (open < 0)
+                {
+                    sb.Append(line, pos, line.Length - pos);
+                    return sb.ToString();
+                }
+                sb.Append(line, pos, open - pos);
+                inBlockComment = true;
+                pos = open + 2;
+            }
+        }
+
+        return sb.ToString();
     }
 
     private static IReadOnlyList<string> ParseNamedImports(string namedStr)

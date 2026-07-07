@@ -4,4 +4,8 @@
     <PackageReference Include="System.Management.Automation" Version="7.4.6" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\CodeIntelligenceMcp.Common\CodeIntelligenceMcp.Common.csproj" />
+  </ItemGroup>
+
 </Project>

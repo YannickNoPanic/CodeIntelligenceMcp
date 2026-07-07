@@ -4,7 +4,7 @@ namespace CodeIntelligenceMcp.Roslyn;
 
 public sealed class PatternScanner(RoslynWorkspaceIndex index, CleanArchitectureNames cleanArch)
 {
-    public PatternSummary Scan()
+    public async Task<PatternSummary> ScanAsync(CancellationToken ct = default)
     {
         ViolationDetector detector = new(index, cleanArch);
 
@@ -18,14 +18,14 @@ public sealed class PatternScanner(RoslynWorkspaceIndex index, CleanArchitecture
         int razorComponents = index.CountRazorDocuments();
 
         IReadOnlyList<ViolationResult> usecaseNotSealed = detector.DetectUsecaseNotSealed();
-        IReadOnlyList<ViolationResult> dtoInCore = detector.DetectDtoInCore();
-        IReadOnlyList<ViolationResult> controllerNotThin = detector.DetectControllerNotThin();
-        IReadOnlyList<ViolationResult> jsonInView = detector.DetectJsonParsingInView();
-        IReadOnlyList<ViolationResult> inlineViewmodel = detector.DetectInlineViewModelRazor();
-        IReadOnlyList<ViolationResult> coreNoEf = detector.DetectCoreNoEf();
-        IReadOnlyList<ViolationResult> coreNoHttp = detector.DetectCoreNoHttp();
-        IReadOnlyList<ViolationResult> coreNoAzure = detector.DetectCoreNoAzure();
-        IReadOnlyList<ViolationResult> businessLogic = detector.DetectBusinessLogicInRazor();
+        IReadOnlyList<ViolationResult> dtoInCore = await detector.DetectDtoInCoreAsync(ct);
+        IReadOnlyList<ViolationResult> controllerNotThin = detector.DetectControllerNotThin(ct);
+        IReadOnlyList<ViolationResult> jsonInView = detector.DetectJsonParsingInView(ct);
+        IReadOnlyList<ViolationResult> inlineViewmodel = detector.DetectInlineViewModelRazor(ct);
+        IReadOnlyList<ViolationResult> coreNoEf = await detector.DetectCoreNoEfAsync(ct);
+        IReadOnlyList<ViolationResult> coreNoHttp = await detector.DetectCoreNoHttpAsync(ct);
+        IReadOnlyList<ViolationResult> coreNoAzure = await detector.DetectCoreNoAzureAsync(ct);
+        IReadOnlyList<ViolationResult> businessLogic = detector.DetectBusinessLogicInRazor(ct);
 
         int sealedCount = useCases - usecaseNotSealed.Count;
         int notSealedCount = usecaseNotSealed.Count;

@@ -1,5 +1,3 @@
-using CodeIntelligenceMcp.JavaScript.Models;
-
 namespace CodeIntelligenceMcp.JavaScript.Models;
 
 public sealed record VueSfcBlock(

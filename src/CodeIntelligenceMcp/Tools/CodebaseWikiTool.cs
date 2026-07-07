@@ -22,6 +22,14 @@ public sealed class CodebaseWikiTool(
         CleanArchitectureNames configured = cleanArch.Config.GetValueOrDefault(workspace, new CleanArchitectureNames("", "", ""));
         CleanArchitectureNames ca = string.IsNullOrEmpty(configured.CoreProject) ? index.CleanArchitecture : configured;
         WikiGenerator generator = new(index);
-        return generator.Generate(focusArea, includePatterns, includeMetrics, includeViolations, includeDiagnostics: false, ca);
+        string wiki = await generator.GenerateAsync(focusArea, includePatterns, includeMetrics, includeViolations, ca, ct);
+
+        if (index.IsStale())
+        {
+            wiki = $"> STALE: files changed since this index was built ({index.IndexedAtUtc:yyyy-MM-dd HH:mm:ss} UTC). "
+                + "Call refresh_workspace for current results.\n\n" + wiki;
+        }
+
+        return wiki;
     }
 }

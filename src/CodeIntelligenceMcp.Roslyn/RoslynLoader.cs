@@ -5,10 +5,15 @@ namespace CodeIntelligenceMcp.Roslyn;
 
 public static class RoslynLoader
 {
+    private static readonly object RegisterLock = new();
+
     public static void RegisterMSBuild()
     {
-        if (!MSBuildLocator.IsRegistered)
-            MSBuildLocator.RegisterDefaults();
+        lock (RegisterLock)
+        {
+            if (!MSBuildLocator.IsRegistered)
+                MSBuildLocator.RegisterDefaults();
+        }
     }
 
     public static async Task<RoslynWorkspaceIndex> LoadAsync(
@@ -16,8 +21,20 @@ public static class RoslynLoader
         CleanArchitectureNames cleanArch,
         CancellationToken cancellationToken = default)
     {
+        RegisterMSBuild();
+
         MSBuildWorkspace workspace = MSBuildWorkspace.Create();
+
+        List<string> loadWarnings = [];
+        workspace.RegisterWorkspaceFailedHandler(e =>
+        {
+            lock (loadWarnings)
+                loadWarnings.Add($"[{e.Diagnostic.Kind}] {e.Diagnostic.Message}");
+        });
+
         Microsoft.CodeAnalysis.Solution solution = await workspace.OpenSolutionAsync(solutionPath, cancellationToken: cancellationToken);
-        return await RoslynWorkspaceIndex.BuildAsync(workspace, solution, cleanArch, cancellationToken);
+        RoslynWorkspaceIndex index = await RoslynWorkspaceIndex.BuildAsync(workspace, solution, cleanArch, loadWarnings, cancellationToken);
+        index.Fingerprint = Git.GitDiffService.ComputeFingerprint(solutionPath);
+        return index;
     }
 }

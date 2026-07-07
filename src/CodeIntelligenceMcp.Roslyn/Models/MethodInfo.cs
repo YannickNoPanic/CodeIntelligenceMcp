@@ -7,7 +7,8 @@ public record MethodInfo(
     int LineStart,
     int LineEnd,
     string Signature,
-    string Body);
+    string Body,
+    int OverloadCount = 1);
 
 public record SymbolSearchResult(
     string SymbolName,

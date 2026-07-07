@@ -34,6 +34,7 @@ public static class PythonFileParser
         var exportedNames = new List<string>();
         var frameworks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var pendingDecorators = new List<string>();
+        string? tripleQuoteDelimiter = null;
 
         int i = 0;
         while (i < lines.Length)
@@ -42,7 +43,23 @@ public static class PythonFileParser
             string trimmed = rawLine.TrimStart();
             int indent = rawLine.Length - trimmed.Length;
 
+            // Inside a triple-quoted string: skip all detection until the closing delimiter
+            if (tripleQuoteDelimiter is not null)
+            {
+                tripleQuoteDelimiter = ScanTripleQuoteState(rawLine, tripleQuoteDelimiter);
+                i++;
+                continue;
+            }
+
             if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith('#'))
+            {
+                i++;
+                continue;
+            }
+
+            // Line opens a triple-quoted string that does not close on the same line
+            tripleQuoteDelimiter = ScanTripleQuoteState(rawLine, null);
+            if (tripleQuoteDelimiter is not null)
             {
                 i++;
                 continue;
@@ -115,7 +132,7 @@ public static class PythonFileParser
             {
                 string name = classMatch.Groups[1].Value;
                 string basesStr = classMatch.Groups[2].Success ? classMatch.Groups[2].Value : string.Empty;
-                var builder = new ClassBuilder(name, i + 1, indent, SplitBases(basesStr), [..pendingDecorators]);
+                var builder = new ClassBuilder(name, i + 1, indent, SplitBases(basesStr), [.. pendingDecorators]);
                 pendingDecorators.Clear();
                 classStack.Push(builder);
                 i++;
@@ -136,7 +153,7 @@ public static class PythonFileParser
 
                 var func = new PythonFunctionInfo(
                     name, i + 1, endLine + 1, parameters, returnType,
-                    [..pendingDecorators], isAsync, isMethod);
+                    [.. pendingDecorators], isAsync, isMethod);
 
                 pendingDecorators.Clear();
 
@@ -162,7 +179,50 @@ public static class PythonFileParser
             Classes: classBuilders.Select(b => b.Build()).ToList(),
             Imports: imports,
             ExportedNames: exportedNames,
-            DetectedFrameworks: [..frameworks]);
+            DetectedFrameworks: [.. frameworks]);
+    }
+
+    /// <summary>
+    /// Tracks triple-quoted string state for a single line.
+    /// Returns the delimiter still open at the end of the line, or null if none.
+    /// Handles same-line open/close (x = """single line""") and both quote styles;
+    /// prefixed forms (r""", f""") work because only the delimiter itself is matched.
+    /// </summary>
+    private static string? ScanTripleQuoteState(string line, string? openDelimiter)
+    {
+        string? current = openDelimiter;
+        int pos = 0;
+
+        while (pos <= line.Length - 3)
+        {
+            if (current is not null)
+            {
+                int close = line.IndexOf(current, pos, StringComparison.Ordinal);
+                if (close < 0)
+                    return current;
+                pos = close + 3;
+                current = null;
+                continue;
+            }
+
+            int doubleIdx = line.IndexOf("\"\"\"", pos, StringComparison.Ordinal);
+            int singleIdx = line.IndexOf("'''", pos, StringComparison.Ordinal);
+            if (doubleIdx < 0 && singleIdx < 0)
+                return null;
+
+            if (doubleIdx >= 0 && (singleIdx < 0 || doubleIdx < singleIdx))
+            {
+                current = "\"\"\"";
+                pos = doubleIdx + 3;
+            }
+            else
+            {
+                current = "'''";
+                pos = singleIdx + 3;
+            }
+        }
+
+        return current;
     }
 
     private static (string ParamStr, int EndLine) ScanToCloseParen(string[] lines, int startLine)

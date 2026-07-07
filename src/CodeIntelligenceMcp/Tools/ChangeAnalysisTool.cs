@@ -32,6 +32,16 @@ public sealed class ChangeAnalysisTool(
         if (string.IsNullOrEmpty(solutionPath))
             return Err($"solution path not found for workspace '{workspace}'");
 
+        // This tool reads the git diff live from disk; the index must match that same state,
+        // otherwise violations and diagnostics describe a different snapshot than the diff.
+        if (index.IsStale())
+        {
+            roslynProvider.Invalidate(workspace);
+            index = await roslynProvider.GetAsync(workspace, ct);
+            if (index is null)
+                return Err($"workspace '{workspace}' could not be re-indexed after refresh");
+        }
+
         CleanArchitectureNames configured = cleanArch.Config.GetValueOrDefault(workspace, new CleanArchitectureNames("", "", ""));
         CleanArchitectureNames ca = string.IsNullOrEmpty(configured.CoreProject) ? index.CleanArchitecture : configured;
         ChangeAnalyzer analyzer = new(index, ca);

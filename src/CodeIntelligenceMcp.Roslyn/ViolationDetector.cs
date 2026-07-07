@@ -7,66 +7,81 @@ namespace CodeIntelligenceMcp.Roslyn;
 
 public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitectureNames cleanArch)
 {
-    public IReadOnlyList<ViolationResult> Detect(string rule) => rule switch
+    // Single source of truth for rule keys — CSharpTools, ChangeAnalyzer, and WikiGenerator
+    // reference this array instead of maintaining their own copies (which drifted apart before).
+    public static readonly string[] AllRuleKeys =
+    [
+        "core-no-ef", "core-no-http", "core-no-azure",
+        "usecase-not-sealed", "dto-in-core", "use-case-not-thin", "layer-boundary",
+        "controller-not-thin",
+        "inline-viewmodel-razor", "business-logic-in-razor", "json-parsing-in-view", "blazor-injects-infra",
+        "missing-cancellation-token", "no-async-void", "async-over-sync",
+        "empty-catch", "throw-ex", "too-many-params",
+        "services-in-web", "missing-interface", "direct-instantiation"
+    ];
+
+    public async Task<IReadOnlyList<ViolationResult>> DetectAsync(string rule, CancellationToken ct = default) => rule switch
     {
-        "core-no-ef" => DetectCoreNoEf(),
-        "core-no-http" => DetectCoreNoHttp(),
-        "core-no-azure" => DetectCoreNoAzure(),
+        "core-no-ef" => await DetectCoreNoEfAsync(ct),
+        "core-no-http" => await DetectCoreNoHttpAsync(ct),
+        "core-no-azure" => await DetectCoreNoAzureAsync(ct),
         "usecase-not-sealed" => DetectUsecaseNotSealed(),
-        "inline-viewmodel-razor" => DetectInlineViewModelRazor(),
-        "business-logic-in-razor" => DetectBusinessLogicInRazor(),
-        "json-parsing-in-view" => DetectJsonParsingInView(),
-        "controller-not-thin" => DetectControllerNotThin(),
-        "dto-in-core" => DetectDtoInCore(),
+        "inline-viewmodel-razor" => DetectInlineViewModelRazor(ct),
+        "business-logic-in-razor" => DetectBusinessLogicInRazor(ct),
+        "json-parsing-in-view" => DetectJsonParsingInView(ct),
+        "controller-not-thin" => DetectControllerNotThin(ct),
+        "dto-in-core" => await DetectDtoInCoreAsync(ct),
         "missing-cancellation-token" => DetectMissingCancellationToken(),
         "no-async-void" => DetectNoAsyncVoid(),
-        "async-over-sync" => DetectAsyncOverSync(),
+        "async-over-sync" => await DetectAsyncOverSyncAsync(ct),
         "use-case-not-thin" => DetectUseCaseNotThin(),
-        "empty-catch" => DetectEmptyCatch(),
-        "throw-ex" => DetectThrowEx(),
+        "empty-catch" => await DetectEmptyCatchAsync(ct),
+        "throw-ex" => await DetectThrowExAsync(ct),
         "layer-boundary" => DetectLayerBoundary(),
         "too-many-params" => DetectTooManyParams(),
-        "blazor-injects-infra" => DetectBlazorInjectsInfra(),
+        "blazor-injects-infra" => DetectBlazorInjectsInfra(ct),
         "services-in-web" => DetectServicesInWeb(),
         "missing-interface" => DetectMissingInterface(),
-        "direct-instantiation" => DetectDirectInstantiation(),
+        "direct-instantiation" => await DetectDirectInstantiationAsync(ct),
         _ => throw new ArgumentException($"Unknown rule: {rule}", nameof(rule))
     };
 
-    public IReadOnlyList<ViolationResult> DetectCoreNoEf()
+    public Task<IReadOnlyList<ViolationResult>> DetectCoreNoEfAsync(CancellationToken ct = default)
     {
-        return DetectForbiddenUsing(
+        return DetectForbiddenUsingAsync(
             "core-no-ef",
             cleanArch.CoreProject,
-            ns => ns.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.OrdinalIgnoreCase),
-            ns => $"Core project must not reference EF Core. Found: using {ns}");
+            ForbiddenCoreNamespaces.IsEfCore,
+            ns => $"Core project must not reference EF Core. Found: using {ns}",
+            ct);
     }
 
-    public IReadOnlyList<ViolationResult> DetectCoreNoHttp()
+    public Task<IReadOnlyList<ViolationResult>> DetectCoreNoHttpAsync(CancellationToken ct = default)
     {
-        return DetectForbiddenUsing(
+        return DetectForbiddenUsingAsync(
             "core-no-http",
             cleanArch.CoreProject,
-            ns => ns.Equals("System.Net.Http", StringComparison.OrdinalIgnoreCase)
-                || ns.Contains("IHttpClientFactory", StringComparison.OrdinalIgnoreCase),
-            ns => $"Core project must not reference HTTP types. Found: using {ns}");
+            ForbiddenCoreNamespaces.IsHttp,
+            ns => $"Core project must not reference HTTP types. Found: using {ns}",
+            ct);
     }
 
-    public IReadOnlyList<ViolationResult> DetectCoreNoAzure()
+    public Task<IReadOnlyList<ViolationResult>> DetectCoreNoAzureAsync(CancellationToken ct = default)
     {
-        return DetectForbiddenUsing(
+        return DetectForbiddenUsingAsync(
             "core-no-azure",
             cleanArch.CoreProject,
-            ns => ns.StartsWith("Azure.", StringComparison.OrdinalIgnoreCase)
-                || ns.StartsWith("Microsoft.Azure.", StringComparison.OrdinalIgnoreCase),
-            ns => $"Core project must not reference Azure SDK. Found: using {ns}");
+            ForbiddenCoreNamespaces.IsAzure,
+            ns => $"Core project must not reference Azure SDK. Found: using {ns}",
+            ct);
     }
 
-    private IReadOnlyList<ViolationResult> DetectForbiddenUsing(
+    private async Task<IReadOnlyList<ViolationResult>> DetectForbiddenUsingAsync(
         string rule,
         string projectName,
         Func<string, bool> isForbidden,
-        Func<string, string> descriptionFactory)
+        Func<string, string> descriptionFactory,
+        CancellationToken ct)
     {
         List<ViolationResult> results = [];
 
@@ -78,7 +93,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
             if (document.FilePath.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            SyntaxNode? root = document.GetSyntaxRootAsync().GetAwaiter().GetResult();
+            SyntaxNode? root = await document.GetSyntaxRootAsync(ct);
             if (root is null)
                 continue;
 
@@ -125,12 +140,14 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         return results;
     }
 
-    public IReadOnlyList<ViolationResult> DetectInlineViewModelRazor()
+    public IReadOnlyList<ViolationResult> DetectInlineViewModelRazor(CancellationToken ct = default)
     {
         List<ViolationResult> results = [];
 
         foreach (Document document in index.GetRazorDocuments())
         {
+            ct.ThrowIfCancellationRequested();
+
             if (document.FilePath is null)
                 continue;
 
@@ -159,7 +176,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         return results;
     }
 
-    public IReadOnlyList<ViolationResult> DetectBusinessLogicInRazor()
+    public IReadOnlyList<ViolationResult> DetectBusinessLogicInRazor(CancellationToken ct = default)
     {
         List<ViolationResult> results = [];
 
@@ -167,6 +184,8 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
 
         foreach (Document document in index.GetRazorDocuments())
         {
+            ct.ThrowIfCancellationRequested();
+
             if (document.FilePath is null)
                 continue;
 
@@ -226,7 +245,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         return results;
     }
 
-    public IReadOnlyList<ViolationResult> DetectJsonParsingInView()
+    public IReadOnlyList<ViolationResult> DetectJsonParsingInView(CancellationToken ct = default)
     {
         List<ViolationResult> results = [];
 
@@ -234,6 +253,8 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
 
         foreach (Document document in index.GetRazorDocuments())
         {
+            ct.ThrowIfCancellationRequested();
+
             if (document.FilePath is null)
                 continue;
 
@@ -266,7 +287,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         return results;
     }
 
-    public IReadOnlyList<ViolationResult> DetectControllerNotThin()
+    public IReadOnlyList<ViolationResult> DetectControllerNotThin(CancellationToken ct = default)
     {
         List<ViolationResult> results = [];
 
@@ -274,6 +295,8 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
 
         foreach (TypeSummary controller in controllers)
         {
+            ct.ThrowIfCancellationRequested();
+
             if (!controller.Name.EndsWith("Controller", StringComparison.OrdinalIgnoreCase))
                 continue;
 
@@ -311,7 +334,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         return results;
     }
 
-    public IReadOnlyList<ViolationResult> DetectDtoInCore()
+    public async Task<IReadOnlyList<ViolationResult>> DetectDtoInCoreAsync(CancellationToken ct = default)
     {
         List<ViolationResult> results = [];
 
@@ -323,7 +346,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
             if (document.FilePath.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            SyntaxNode? root = document.GetSyntaxRootAsync().GetAwaiter().GetResult();
+            SyntaxNode? root = await document.GetSyntaxRootAsync(ct);
             if (root is null)
                 continue;
 
@@ -489,7 +512,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         return results;
     }
 
-    public IReadOnlyList<ViolationResult> DetectEmptyCatch()
+    public async Task<IReadOnlyList<ViolationResult>> DetectEmptyCatchAsync(CancellationToken ct = default)
     {
         List<ViolationResult> results = [];
 
@@ -498,7 +521,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
             if (document.FilePath is null)
                 continue;
 
-            SyntaxNode? root = document.GetSyntaxRootAsync().GetAwaiter().GetResult();
+            SyntaxNode? root = await document.GetSyntaxRootAsync(ct);
             if (root is null)
                 continue;
 
@@ -532,7 +555,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         return results;
     }
 
-    public IReadOnlyList<ViolationResult> DetectThrowEx()
+    public async Task<IReadOnlyList<ViolationResult>> DetectThrowExAsync(CancellationToken ct = default)
     {
         List<ViolationResult> results = [];
 
@@ -541,7 +564,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
             if (document.FilePath is null)
                 continue;
 
-            SyntaxNode? root = document.GetSyntaxRootAsync().GetAwaiter().GetResult();
+            SyntaxNode? root = await document.GetSyntaxRootAsync(ct);
             if (root is null)
                 continue;
 
@@ -585,12 +608,14 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         return results;
     }
 
-    public IReadOnlyList<ViolationResult> DetectBlazorInjectsInfra()
+    public IReadOnlyList<ViolationResult> DetectBlazorInjectsInfra(CancellationToken ct = default)
     {
         List<ViolationResult> results = [];
 
         foreach (string filePath in index.GetRazorFilePaths())
         {
+            ct.ThrowIfCancellationRequested();
+
             string[] lines = File.ReadAllLines(filePath);
             for (int i = 0; i < lines.Length; i++)
             {
@@ -765,7 +790,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         return results;
     }
 
-    public IReadOnlyList<ViolationResult> DetectAsyncOverSync()
+    public async Task<IReadOnlyList<ViolationResult>> DetectAsyncOverSyncAsync(CancellationToken ct = default)
     {
         List<ViolationResult> results = [];
 
@@ -777,7 +802,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
                 || filePath.Contains("\\obj\\", StringComparison.Ordinal))
                 continue;
 
-            SyntaxNode? root = doc.GetSyntaxRootAsync().GetAwaiter().GetResult();
+            SyntaxNode? root = await doc.GetSyntaxRootAsync(ct);
             if (root is null) continue;
 
             foreach (MemberAccessExpressionSyntax memberAccess in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
@@ -871,7 +896,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         return results;
     }
 
-    public IReadOnlyList<ViolationResult> DetectDirectInstantiation()
+    public async Task<IReadOnlyList<ViolationResult>> DetectDirectInstantiationAsync(CancellationToken ct = default)
     {
         string[] suffixes = ["Service", "Repository", "Queries"];
         List<ViolationResult> results = [];
@@ -888,7 +913,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
             if (doc.Project.Name.Contains("Infrastructure", StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            SyntaxNode? root = doc.GetSyntaxRootAsync().GetAwaiter().GetResult();
+            SyntaxNode? root = await doc.GetSyntaxRootAsync(ct);
             if (root is null) continue;
 
             foreach (ObjectCreationExpressionSyntax newExpr in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())

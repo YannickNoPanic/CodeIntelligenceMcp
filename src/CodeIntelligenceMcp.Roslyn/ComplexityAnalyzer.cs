@@ -5,30 +5,57 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace CodeIntelligenceMcp.Roslyn;
 
+internal sealed record ProjectMethodComplexity(string ProjectName, MethodComplexity Method);
+
 public sealed class ComplexityAnalyzer(RoslynWorkspaceIndex index)
 {
-    public IReadOnlyList<MethodComplexity> Analyze(
+    public async Task<IReadOnlyList<MethodComplexity>> AnalyzeAsync(
         int minComplexity = 5,
         string? projectFilter = null,
         int minLines = 0,
         string sortBy = "complexity",
-        string? typeFilter = null)
+        string? typeFilter = null,
+        CancellationToken ct = default)
     {
-        List<MethodComplexity> results = [];
+        IReadOnlyList<ProjectMethodComplexity> all = await index.GetAllComplexityAsync(ct);
+
+        IEnumerable<ProjectMethodComplexity> query = all;
+
+        if (projectFilter is not null)
+            query = query.Where(x => x.ProjectName.Contains(projectFilter, StringComparison.OrdinalIgnoreCase));
+
+        if (typeFilter is not null)
+            query = query.Where(x => x.Method.TypeName.Equals(typeFilter, StringComparison.OrdinalIgnoreCase));
+
+        query = query.Where(x =>
+            x.Method.Complexity >= minComplexity
+            || (minLines > 0 && x.Method.Lines >= minLines));
+
+        IEnumerable<MethodComplexity> results = query.Select(x => x.Method);
+
+        return sortBy == "lines"
+            ? [.. results.OrderByDescending(r => r.Lines)]
+            : [.. results.OrderByDescending(r => r.Complexity)];
+    }
+
+    // Full-solution computation, run once per index instance and cached there.
+    internal static async Task<IReadOnlyList<ProjectMethodComplexity>> ComputeAllAsync(
+        RoslynWorkspaceIndex index,
+        CancellationToken ct)
+    {
+        List<ProjectMethodComplexity> results = [];
 
         foreach (Document document in index.GetAllDocuments(skipTests: true))
         {
-            if (projectFilter is not null
-                && !document.Project.Name.Contains(projectFilter, StringComparison.OrdinalIgnoreCase))
-                continue;
-
             string? filePath = document.FilePath;
             if (filePath is null)
                 continue;
 
-            SyntaxNode? root = document.GetSyntaxRootAsync().GetAwaiter().GetResult();
+            SyntaxNode? root = await document.GetSyntaxRootAsync(ct);
             if (root is null)
                 continue;
+
+            string projectName = document.Project.Name;
 
             foreach (MethodDeclarationSyntax method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
@@ -41,25 +68,19 @@ public sealed class ComplexityAnalyzer(RoslynWorkspaceIndex index)
                     .FirstOrDefault()
                     ?.Identifier.Text ?? "<unknown>";
 
-                if (typeFilter is not null && !typeName.Equals(typeFilter, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
                 FileLinePositionSpan methodSpan = method.GetLocation().GetLineSpan();
                 int lineNumber = methodSpan.StartLinePosition.Line + 1;
                 int lines = methodSpan.EndLinePosition.Line - methodSpan.StartLinePosition.Line + 1;
                 int complexity = ComputeComplexity(body);
 
-                if (complexity < minComplexity && (minLines == 0 || lines < minLines))
-                    continue;
-
-                results.Add(new MethodComplexity(
+                results.Add(new ProjectMethodComplexity(projectName, new MethodComplexity(
                     typeName,
                     method.Identifier.Text,
                     filePath,
                     lineNumber,
                     complexity,
                     GetLabel(complexity),
-                    lines));
+                    lines)));
             }
 
             foreach (ConstructorDeclarationSyntax ctor in root.DescendantNodes().OfType<ConstructorDeclarationSyntax>())
@@ -77,23 +98,18 @@ public sealed class ComplexityAnalyzer(RoslynWorkspaceIndex index)
                 int lines = ctorSpan.EndLinePosition.Line - ctorSpan.StartLinePosition.Line + 1;
                 int complexity = ComputeComplexity(ctor.Body);
 
-                if (complexity < minComplexity && (minLines == 0 || lines < minLines))
-                    continue;
-
-                results.Add(new MethodComplexity(
+                results.Add(new ProjectMethodComplexity(projectName, new MethodComplexity(
                     typeName,
                     ".ctor",
                     filePath,
                     lineNumber,
                     complexity,
                     GetLabel(complexity),
-                    lines));
+                    lines)));
             }
         }
 
-        return sortBy == "lines"
-            ? [.. results.OrderByDescending(r => r.Lines)]
-            : [.. results.OrderByDescending(r => r.Complexity)];
+        return results;
     }
 
     private static int ComputeComplexity(SyntaxNode body)

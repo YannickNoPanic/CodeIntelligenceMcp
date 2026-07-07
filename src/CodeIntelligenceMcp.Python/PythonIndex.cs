@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using CodeIntelligenceMcp.Common;
 using CodeIntelligenceMcp.Python.Models;
 
 namespace CodeIntelligenceMcp.Python;
@@ -26,17 +28,18 @@ public sealed class PythonIndex
     public int FileCount => _files.Count;
     public string RootPath => _rootPath;
 
-    public static PythonIndex Build(string rootPath, Action<string>? log = null)
+    public static PythonIndex Build(string rootPath, Action<string>? log = null, CancellationToken ct = default)
     {
-        var files = new Dictionary<string, PythonFileInfo>(StringComparer.OrdinalIgnoreCase);
+        ConcurrentDictionary<string, PythonFileInfo> files = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach (string filePath in EnumerateFiles(rootPath, "*.py", SkipDirs))
+        List<string> sourceFiles = [.. SourceFileWalker.EnumerateFiles(rootPath, [".py"], SkipDirs, ct)];
+
+        Parallel.ForEach(sourceFiles, new ParallelOptions { CancellationToken = ct }, filePath =>
         {
             try
             {
                 string content = File.ReadAllText(filePath);
-                PythonFileInfo info = PythonFileParser.Parse(filePath, content);
-                files[filePath] = info;
+                files[filePath] = PythonFileParser.Parse(filePath, content);
             }
             catch (IOException ex)
             {
@@ -46,12 +49,12 @@ public sealed class PythonIndex
             {
                 log?.Invoke($"[warn] Failed to parse {filePath}: {ex.Message}");
             }
-        }
+        });
 
         PythonProjectInfo projectInfo;
         try
         {
-            projectInfo = PythonPackageParser.ParseProjectInfo(rootPath);
+            projectInfo = PythonPackageParser.ParseProjectInfo(rootPath, log);
         }
         catch (Exception ex)
         {
@@ -156,11 +159,4 @@ public sealed class PythonIndex
 
     public IReadOnlyDictionary<string, PythonFileInfo> GetAllFiles() => _files;
 
-    private static IEnumerable<string> EnumerateFiles(string rootPath, string pattern, string[] skipDirs)
-    {
-        return Directory.EnumerateFiles(rootPath, pattern, SearchOption.AllDirectories)
-            .Where(f => !skipDirs.Any(skip =>
-                f.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                    .Any(segment => string.Equals(segment, skip, StringComparison.OrdinalIgnoreCase))));
-    }
 }

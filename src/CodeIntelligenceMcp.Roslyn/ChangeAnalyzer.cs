@@ -7,15 +7,6 @@ namespace CodeIntelligenceMcp.Roslyn;
 
 public sealed class ChangeAnalyzer(RoslynWorkspaceIndex index, CleanArchitectureNames cleanArch)
 {
-    private static readonly string[] AllViolationRules =
-    [
-        "core-no-ef", "core-no-http", "core-no-azure",
-        "usecase-not-sealed",
-        "inline-viewmodel-razor", "business-logic-in-razor", "json-parsing-in-view",
-        "controller-not-thin", "dto-in-core",
-        "missing-cancellation-token", "no-async-void", "use-case-not-thin"
-    ];
-
     public async Task<ChangeAnalysis> AnalyzeAsync(
         string workspace,
         string solutionPath,
@@ -54,9 +45,9 @@ public sealed class ChangeAnalyzer(RoslynWorkspaceIndex index, CleanArchitecture
 
         ViolationDetector detector = new(index, cleanArch);
         List<ViolationResult> scopedViolations = [];
-        foreach (string rule in AllViolationRules)
+        foreach (string rule in ViolationDetector.AllRuleKeys)
         {
-            foreach (ViolationResult v in detector.Detect(rule))
+            foreach (ViolationResult v in await detector.DetectAsync(rule, ct))
             {
                 if (changedFilePaths.Contains(v.FilePath.Replace('\\', '/')))
                     scopedViolations.Add(v);

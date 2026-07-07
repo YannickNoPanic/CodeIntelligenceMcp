@@ -1,8 +1,6 @@
 using CodeIntelligenceMcp.Config;
 using CodeIntelligenceMcp.Logging;
 using CodeIntelligenceMcp.Tools;
-using CodeIntelligenceMcp.Workspaces;
-using Microsoft.Extensions.Logging;
 
 string logPath = Path.Combine(Path.GetTempPath(), "CodeIntelligenceMcp.log");
 
@@ -26,11 +24,9 @@ startupLogger.LogInformation("Mode={Mode}", useSse ? "SSE" : "stdio");
 
 try
 {
-    RoslynLoader.RegisterMSBuild();
-
     string configPath = Path.Combine(AppContext.BaseDirectory, "mcp-config.json");
     startupLogger.LogInformation("Loading config from '{ConfigPath}'", configPath);
-    McpConfig config = McpConfigLoader.Load(configPath);
+    McpConfig config = McpConfigLoader.Load(configPath, startupLogger);
 
     startupLogger.LogInformation(
         "Config loaded — {Count} workspace(s): {Names}",
@@ -52,6 +48,34 @@ try
         .Where(w => w.Type == "dotnet" && w.Solution is not null)
         .ToDictionary(w => w.Name, w => w.Solution!);
 
+    void RegisterServices(IServiceCollection services)
+    {
+        services.AddSingleton(config);
+        services.AddSingleton(new CleanArchRegistry(cleanArchConfig));
+        services.AddSingleton(new SolutionPathRegistry(solutionPaths));
+        services.AddSingleton<IWorkspaceProvider<RoslynWorkspaceIndex>, RoslynWorkspaceProvider>();
+        services.AddSingleton<IWorkspaceProvider<AspIndex>>(sp =>
+            new FileWalkWorkspaceProvider<AspIndex>(
+                config,
+                sp.GetRequiredService<ILoggerFactory>().CreateLogger("AspWorkspace"),
+                "asp-classic", AspIndex.Build, i => i.FileCount));
+        services.AddSingleton<IWorkspaceProvider<PowerShellIndex>>(sp =>
+            new FileWalkWorkspaceProvider<PowerShellIndex>(
+                config,
+                sp.GetRequiredService<ILoggerFactory>().CreateLogger("PowerShellWorkspace"),
+                "powershell", PowerShellIndex.Build, i => i.FileCount));
+        services.AddSingleton<IWorkspaceProvider<PythonIndex>>(sp =>
+            new FileWalkWorkspaceProvider<PythonIndex>(
+                config,
+                sp.GetRequiredService<ILoggerFactory>().CreateLogger("PythonWorkspace"),
+                "python", PythonIndex.Build, i => i.FileCount));
+        services.AddSingleton<IWorkspaceProvider<JsIndex>>(sp =>
+            new FileWalkWorkspaceProvider<JsIndex>(
+                config,
+                sp.GetRequiredService<ILoggerFactory>().CreateLogger("JsWorkspace"),
+                "javascript", JsIndex.Build, i => i.FileCount));
+    }
+
     if (useSse)
     {
         var builder = WebApplication.CreateBuilder(args);
@@ -60,14 +84,7 @@ try
 
         builder.Logging.AddProvider(fileLogger);
 
-        builder.Services.AddSingleton(config);
-        builder.Services.AddSingleton(new CleanArchRegistry(cleanArchConfig));
-        builder.Services.AddSingleton(new SolutionPathRegistry(solutionPaths));
-        builder.Services.AddSingleton<IWorkspaceProvider<RoslynWorkspaceIndex>, RoslynWorkspaceProvider>();
-        builder.Services.AddSingleton<IWorkspaceProvider<AspIndex>, AspWorkspaceProvider>();
-        builder.Services.AddSingleton<IWorkspaceProvider<PowerShellIndex>, PowerShellWorkspaceProvider>();
-        builder.Services.AddSingleton<IWorkspaceProvider<PythonIndex>, PythonWorkspaceProvider>();
-        builder.Services.AddSingleton<IWorkspaceProvider<JsIndex>, JsWorkspaceProvider>();
+        RegisterServices(builder.Services);
 
         builder.Services
             .AddMcpServer()
@@ -154,14 +171,7 @@ try
         builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
         builder.Logging.AddProvider(fileLogger);
 
-        builder.Services.AddSingleton(config);
-        builder.Services.AddSingleton(new CleanArchRegistry(cleanArchConfig));
-        builder.Services.AddSingleton(new SolutionPathRegistry(solutionPaths));
-        builder.Services.AddSingleton<IWorkspaceProvider<RoslynWorkspaceIndex>, RoslynWorkspaceProvider>();
-        builder.Services.AddSingleton<IWorkspaceProvider<AspIndex>, AspWorkspaceProvider>();
-        builder.Services.AddSingleton<IWorkspaceProvider<PowerShellIndex>, PowerShellWorkspaceProvider>();
-        builder.Services.AddSingleton<IWorkspaceProvider<PythonIndex>, PythonWorkspaceProvider>();
-        builder.Services.AddSingleton<IWorkspaceProvider<JsIndex>, JsWorkspaceProvider>();
+        RegisterServices(builder.Services);
 
         builder.Services
             .AddMcpServer()

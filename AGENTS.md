@@ -2,8 +2,8 @@
 
 ## What this project is
 
-A .NET 10 MCP server (stdio transport) that gives Claude Code structured,
-token-efficient access to two codebases without Claude needing to read files directly.
+A .NET 10 MCP server (stdio transport) that gives Codex structured,
+token-efficient access to two codebases without Codex needing to read files directly.
 
 Workspaces are **lazy-loaded**: the server starts instantly and indexes on the first tool call
 per workspace. Subsequent calls are instant. All tools are **read-only**.
@@ -33,12 +33,8 @@ dotnet run --project src/CodeIntelligenceMcp --no-launch-profile -c Release --no
 ```
 src/
   CodeIntelligenceMcp/          # MCP server entry point (Exe)
-  CodeIntelligenceMcp.Common/   # Shared utilities (SourceFileWalker) for the file-walk indexers
   CodeIntelligenceMcp.Roslyn/   # C# + Blazor indexer (Roslyn + MSBuild.Locator)
   CodeIntelligenceMcp.AspClassic/  # Classic ASP + SQL indexer
-  CodeIntelligenceMcp.JavaScript/  # JS/TS/Vue indexer (line-based)
-  CodeIntelligenceMcp.Python/   # Python indexer (line-based)
-  CodeIntelligenceMcp.PowerShell/  # PowerShell indexer
   VBScript.Parser/              # Forked from YannickNoPanic/vbscript-parser, owned source
 tests/
   CodeIntelligenceMcp.Tests/    # xUnit + FluentAssertions + NSubstitute
@@ -83,14 +79,14 @@ Resolved to **1.2.0** (latest stable at time of scaffold). Use stdio transport.
 ## Architecture constraints for this project
 
 - Tools in `CodeIntelligenceMcp/Tools/` are thin: delegate to index classes, no logic
-- All indexing logic lives in the language indexer projects (`.Roslyn`, `.AspClassic`, `.JavaScript`, `.Python`, `.PowerShell`)
-- Language indexer projects have no dependency on each other; the file-walk indexers may depend on `CodeIntelligenceMcp.Common`
-- `CodeIntelligenceMcp.Common` and `VBScript.Parser` have no dependencies beyond the framework
+- All indexing logic lives in `CodeIntelligenceMcp.Roslyn` or `CodeIntelligenceMcp.AspClassic`
+- `CodeIntelligenceMcp.Roslyn` and `CodeIntelligenceMcp.AspClassic` have no dependency on each other
+- `VBScript.Parser` has no dependencies beyond the framework
 - No business logic in `Program.cs` — only wiring
 
 ---
 
-## What deviates from global CLAUDE.md
+## What deviates from global AGENTS.md
 
 - No `Result<T>` for Roslyn index methods that cannot fail at the call site —
   use direct return types there; `Result<T>` applies to config loading and file operations

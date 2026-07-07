@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using CodeIntelligenceMcp.Common;
 using CodeIntelligenceMcp.JavaScript.Models;
 
 namespace CodeIntelligenceMcp.JavaScript;
@@ -9,7 +11,7 @@ public sealed class JsIndex
     private readonly JsProjectInfo _projectInfo;
     private readonly string _rootPath;
 
-    private static readonly string[] JsExtensions = ["*.js", "*.ts", "*.jsx", "*.tsx", "*.mjs", "*.cjs"];
+    private static readonly string[] IndexedExtensions = [".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs", ".vue"];
 
     private static readonly string[] SkipDirs =
         ["node_modules", ".git", "dist", "build", ".next", ".nuxt", ".output",
@@ -31,41 +33,23 @@ public sealed class JsIndex
     public int FileCount => _files.Count + _vueComponents.Count;
     public string RootPath => _rootPath;
 
-    public static JsIndex Build(string rootPath, Action<string>? log = null)
+    public static JsIndex Build(string rootPath, Action<string>? log = null, CancellationToken ct = default)
     {
-        var files = new Dictionary<string, JsFileInfo>(StringComparer.OrdinalIgnoreCase);
-        var vueComponents = new List<VueSfcInfo>();
+        ConcurrentDictionary<string, JsFileInfo> files = new(StringComparer.OrdinalIgnoreCase);
+        ConcurrentBag<VueSfcInfo> vueBag = [];
 
-        // Parse JS/TS files
-        foreach (string ext in JsExtensions)
-        {
-            foreach (string filePath in EnumerateFiles(rootPath, ext, SkipDirs))
-            {
-                try
-                {
-                    string content = File.ReadAllText(filePath);
-                    JsFileInfo info = JsFileParser.Parse(filePath, content);
-                    files[filePath] = info;
-                }
-                catch (IOException ex)
-                {
-                    log?.Invoke($"[warn] Could not read {filePath}: {ex.Message}");
-                }
-                catch (Exception ex)
-                {
-                    log?.Invoke($"[warn] Failed to parse {filePath}: {ex.Message}");
-                }
-            }
-        }
+        List<string> sourceFiles = [.. SourceFileWalker.EnumerateFiles(rootPath, IndexedExtensions, SkipDirs, ct)];
 
-        // Parse Vue SFC files
-        foreach (string filePath in EnumerateFiles(rootPath, "*.vue", SkipDirs))
+        Parallel.ForEach(sourceFiles, new ParallelOptions { CancellationToken = ct }, filePath =>
         {
             try
             {
                 string content = File.ReadAllText(filePath);
-                VueSfcInfo info = VueSfcExtractor.Extract(filePath, content);
-                vueComponents.Add(info);
+
+                if (filePath.EndsWith(".vue", StringComparison.OrdinalIgnoreCase))
+                    vueBag.Add(VueSfcExtractor.Extract(filePath, content));
+                else
+                    files[filePath] = JsFileParser.Parse(filePath, content);
             }
             catch (IOException ex)
             {
@@ -73,14 +57,16 @@ public sealed class JsIndex
             }
             catch (Exception ex)
             {
-                log?.Invoke($"[warn] Failed to parse Vue file {filePath}: {ex.Message}");
+                log?.Invoke($"[warn] Failed to parse {filePath}: {ex.Message}");
             }
-        }
+        });
+
+        List<VueSfcInfo> vueComponents = [.. vueBag.OrderBy(v => v.FilePath, StringComparer.OrdinalIgnoreCase)];
 
         JsProjectInfo projectInfo;
         try
         {
-            projectInfo = JsPackageParser.ParseProjectInfo(rootPath);
+            projectInfo = JsPackageParser.ParseProjectInfo(rootPath, log);
         }
         catch (Exception ex)
         {
@@ -216,12 +202,4 @@ public sealed class JsIndex
     public IReadOnlyList<VueSfcInfo> GetVueComponents() => _vueComponents;
 
     public IReadOnlyDictionary<string, JsFileInfo> GetAllFiles() => _files;
-
-    private static IEnumerable<string> EnumerateFiles(string rootPath, string pattern, string[] skipDirs)
-    {
-        return Directory.EnumerateFiles(rootPath, pattern, SearchOption.AllDirectories)
-            .Where(f => !skipDirs.Any(skip =>
-                f.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                    .Any(segment => string.Equals(segment, skip, StringComparison.OrdinalIgnoreCase))));
-    }
 }

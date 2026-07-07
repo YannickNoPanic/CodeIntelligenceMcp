@@ -7,7 +7,9 @@ internal static class McpConfigLoader
         PropertyNameCaseInsensitive = true,
     };
 
-    internal static McpConfig Load(string configPath)
+    // A broken individual workspace must not take down the server for the healthy ones:
+    // invalid entries are logged and dropped, only a missing/unreadable config file is fatal.
+    internal static McpConfig Load(string configPath, ILogger? logger = null)
     {
         if (!File.Exists(configPath))
             throw new FileNotFoundException($"MCP config not found: {configPath}");
@@ -16,65 +18,37 @@ internal static class McpConfigLoader
         McpConfig config = JsonSerializer.Deserialize<McpConfig>(json, JsonOptions)
             ?? throw new InvalidOperationException($"Failed to deserialize config: {configPath}");
 
-        Validate(config);
-        return config;
-    }
-
-    private static void Validate(McpConfig config)
-    {
+        List<WorkspaceConfig> valid = [];
         foreach (WorkspaceConfig workspace in config.Workspaces)
         {
-            switch (workspace.Type)
+            string? error = Validate(workspace);
+            if (error is null)
             {
-                case "dotnet":
-                    if (string.IsNullOrWhiteSpace(workspace.Solution))
-                        throw new InvalidOperationException(
-                            $"Workspace '{workspace.Name}': 'solution' is required for type 'dotnet'.");
-                    if (!File.Exists(workspace.Solution))
-                        throw new FileNotFoundException(
-                            $"Workspace '{workspace.Name}': solution not found at '{workspace.Solution}'.");
-                    break;
-
-                case "asp-classic":
-                    if (string.IsNullOrWhiteSpace(workspace.RootPath))
-                        throw new InvalidOperationException(
-                            $"Workspace '{workspace.Name}': 'rootPath' is required for type 'asp-classic'.");
-                    if (!Directory.Exists(workspace.RootPath))
-                        throw new DirectoryNotFoundException(
-                            $"Workspace '{workspace.Name}': rootPath not found at '{workspace.RootPath}'.");
-                    break;
-
-                case "powershell":
-                    if (string.IsNullOrWhiteSpace(workspace.RootPath))
-                        throw new InvalidOperationException(
-                            $"Workspace '{workspace.Name}': 'rootPath' is required for type 'powershell'.");
-                    if (!Directory.Exists(workspace.RootPath))
-                        throw new DirectoryNotFoundException(
-                            $"Workspace '{workspace.Name}': rootPath not found at '{workspace.RootPath}'.");
-                    break;
-
-                case "python":
-                    if (string.IsNullOrWhiteSpace(workspace.RootPath))
-                        throw new InvalidOperationException(
-                            $"Workspace '{workspace.Name}': 'rootPath' is required for type 'python'.");
-                    if (!Directory.Exists(workspace.RootPath))
-                        throw new DirectoryNotFoundException(
-                            $"Workspace '{workspace.Name}': rootPath not found at '{workspace.RootPath}'.");
-                    break;
-
-                case "javascript":
-                    if (string.IsNullOrWhiteSpace(workspace.RootPath))
-                        throw new InvalidOperationException(
-                            $"Workspace '{workspace.Name}': 'rootPath' is required for type 'javascript'.");
-                    if (!Directory.Exists(workspace.RootPath))
-                        throw new DirectoryNotFoundException(
-                            $"Workspace '{workspace.Name}': rootPath not found at '{workspace.RootPath}'.");
-                    break;
-
-                default:
-                    throw new InvalidOperationException(
-                        $"Workspace '{workspace.Name}': unknown type '{workspace.Type}'. Expected 'dotnet', 'asp-classic', 'powershell', 'python', or 'javascript'.");
+                valid.Add(workspace);
+            }
+            else
+            {
+                logger?.LogWarning("Skipping workspace '{Workspace}': {Reason}", workspace.Name, error);
             }
         }
+
+        return new McpConfig { Workspaces = valid };
     }
+
+    private static string? Validate(WorkspaceConfig workspace) => workspace.Type switch
+    {
+        "dotnet" when string.IsNullOrWhiteSpace(workspace.Solution) =>
+            "'solution' is required for type 'dotnet'",
+        "dotnet" when !File.Exists(workspace.Solution) =>
+            $"solution not found at '{workspace.Solution}'",
+        "dotnet" => null,
+
+        "asp-classic" or "powershell" or "python" or "javascript" when string.IsNullOrWhiteSpace(workspace.RootPath) =>
+            $"'rootPath' is required for type '{workspace.Type}'",
+        "asp-classic" or "powershell" or "python" or "javascript" when !Directory.Exists(workspace.RootPath) =>
+            $"rootPath not found at '{workspace.RootPath}'",
+        "asp-classic" or "powershell" or "python" or "javascript" => null,
+
+        _ => $"unknown type '{workspace.Type}' — expected 'dotnet', 'asp-classic', 'powershell', 'python', or 'javascript'"
+    };
 }

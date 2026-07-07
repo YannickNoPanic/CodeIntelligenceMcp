@@ -20,6 +20,8 @@
     <ProjectReference Include="..\..\src\CodeIntelligenceMcp.AspClassic\CodeIntelligenceMcp.AspClassic.csproj" />
     <ProjectReference Include="..\..\src\CodeIntelligenceMcp.Roslyn\CodeIntelligenceMcp.Roslyn.csproj" />
     <ProjectReference Include="..\..\src\CodeIntelligenceMcp.PowerShell\CodeIntelligenceMcp.PowerShell.csproj" />
+    <ProjectReference Include="..\..\src\CodeIntelligenceMcp.JavaScript\CodeIntelligenceMcp.JavaScript.csproj" />
+    <ProjectReference Include="..\..\src\CodeIntelligenceMcp.Python\CodeIntelligenceMcp.Python.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,9 +1,51 @@
+using System.Security.Cryptography;
+using System.Text;
 using LibGit2Sharp;
 
 namespace CodeIntelligenceMcp.Roslyn.Git;
 
 public static class GitDiffService
 {
+    // Cheap staleness signal: HEAD sha plus the dirty file list with mtimes. If this differs
+    // from the value captured at index build, the in-memory index no longer matches the disk.
+    public static string? ComputeFingerprint(string startPath)
+    {
+        string? repoRoot = ResolveRepoRoot(startPath);
+        if (repoRoot is null)
+            return null;
+
+        try
+        {
+            using Repository repo = new(repoRoot);
+
+            StringBuilder sb = new(repo.Head.Tip?.Sha ?? "no-head");
+
+            RepositoryStatus status = repo.RetrieveStatus(new StatusOptions
+            {
+                IncludeUntracked = true,
+                RecurseUntrackedDirs = true
+            });
+
+            foreach (StatusEntry entry in status
+                .Where(e => e.State != FileStatus.Ignored)
+                .OrderBy(e => e.FilePath, StringComparer.Ordinal))
+            {
+                sb.Append('|').Append(entry.FilePath);
+
+                string fullPath = Path.Combine(repoRoot, entry.FilePath);
+                if (File.Exists(fullPath))
+                    sb.Append(':').Append(File.GetLastWriteTimeUtc(fullPath).Ticks);
+            }
+
+            byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString()));
+            return Convert.ToHexString(hash)[..16];
+        }
+        catch (LibGit2SharpException)
+        {
+            return null;
+        }
+    }
+
     public static string? ResolveRepoRoot(string startPath)
     {
         string? dir = File.Exists(startPath) ? Path.GetDirectoryName(startPath) : startPath;

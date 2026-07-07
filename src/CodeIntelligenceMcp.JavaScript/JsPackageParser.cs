@@ -5,7 +5,7 @@ namespace CodeIntelligenceMcp.JavaScript;
 
 public static class JsPackageParser
 {
-    public static JsProjectInfo ParseProjectInfo(string rootPath)
+    public static JsProjectInfo ParseProjectInfo(string rootPath, Action<string>? log = null)
     {
         string? projectName = null;
         string? version = null;
@@ -20,13 +20,13 @@ public static class JsPackageParser
             {
                 ParsePackageJson(packageJsonPath, ref projectName, ref version, dependencies, scripts, frameworks);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Ignore parse errors
+                log?.Invoke($"[warn] Failed to parse {packageJsonPath}: {ex.Message}");
             }
         }
 
-        return new JsProjectInfo(projectName, version, dependencies, scripts, [..frameworks]);
+        return new JsProjectInfo(projectName, version, dependencies, scripts, [.. frameworks]);
     }
 
     private static void ParsePackageJson(

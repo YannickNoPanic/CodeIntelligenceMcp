@@ -17,6 +17,21 @@ public sealed class CSharpTools(
         return string.IsNullOrEmpty(configured.CoreProject) ? index.CleanArchitecture : configured;
     }
 
+    // Simple names can match multiple types across namespaces; instead of silently picking
+    // one, report all fully qualified candidates so the caller can disambiguate.
+    private static string? AmbiguityError(RoslynWorkspaceIndex index, string typeName)
+    {
+        IReadOnlyList<string> candidates = index.GetTypeCandidates(typeName);
+        if (candidates.Count <= 1)
+            return null;
+
+        return JsonSerializer.Serialize(new
+        {
+            error = $"ambiguous type name '{typeName}' — use a fully qualified name",
+            candidates
+        }, JsonOptions);
+    }
+
     [McpServerTool(Name = "get_type")]
     [Description("Get full structural details of a type: properties, methods, base type, interfaces. Use when you know the type name and need its members.")]
     public async Task<string> GetType(
@@ -27,6 +42,9 @@ public sealed class CSharpTools(
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
             return Err($"workspace '{workspace}' not found");
+
+        if (AmbiguityError(index, typeName) is string ambiguous)
+            return ambiguous;
 
         TypeInfo? typeInfo = index.GetType(typeName);
         if (typeInfo is null)
@@ -66,6 +84,9 @@ public sealed class CSharpTools(
         if (index is null)
             return Err($"workspace '{workspace}' not found");
 
+        if (AmbiguityError(index, typeName) is string ambiguous)
+            return ambiguous;
+
         MethodInfo? methodInfo = index.GetMethod(typeName, methodName);
         if (methodInfo is null)
             return Err("method not found");
@@ -99,7 +120,10 @@ public sealed class CSharpTools(
         if (index is null)
             return Err($"workspace '{workspace}' not found");
 
-        IReadOnlyList<UsageResult> results = await index.FindUsagesAsync(symbolName, ct);
+        if (AmbiguityError(index, symbolName) is string ambiguous)
+            return ambiguous;
+
+        IReadOnlyList<UsageResult> results = await new ReferenceQueries(index).FindUsagesAsync(symbolName, ct);
         return Ok(results);
     }
 
@@ -113,6 +137,9 @@ public sealed class CSharpTools(
         RoslynWorkspaceIndex? index = await roslynProvider.GetAsync(workspace, ct);
         if (index is null)
             return Err($"workspace '{workspace}' not found");
+
+        if (AmbiguityError(index, typeName) is string ambiguous)
+            return ambiguous;
 
         DependencyInfo? depInfo = index.GetDependencies(typeName);
         if (depInfo is null)
@@ -177,7 +204,7 @@ public sealed class CSharpTools(
 
         CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
         PatternScanner scanner = new(index, ca);
-        PatternSummary summary = scanner.Scan();
+        PatternSummary summary = await scanner.ScanAsync(ct);
         return Ok(summary);
     }
 
@@ -209,7 +236,7 @@ public sealed class CSharpTools(
             return Err($"workspace '{workspace}' not found");
 
         ComplexityAnalyzer analyzer = new(index);
-        IReadOnlyList<MethodComplexity> results = analyzer.Analyze(minComplexity, projectFilter, minLines, sortBy);
+        IReadOnlyList<MethodComplexity> results = await analyzer.AnalyzeAsync(minComplexity, projectFilter, minLines, sortBy, ct: ct);
         return Ok(results);
     }
 
@@ -227,43 +254,39 @@ public sealed class CSharpTools(
         CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
         ViolationDetector detector = new(index, ca);
 
-        string[] allRules =
-        [
-            "core-no-ef", "core-no-http", "core-no-azure",
-            "usecase-not-sealed", "dto-in-core", "use-case-not-thin", "layer-boundary",
-            "controller-not-thin",
-            "inline-viewmodel-razor", "business-logic-in-razor", "json-parsing-in-view", "blazor-injects-infra",
-            "missing-cancellation-token", "no-async-void", "async-over-sync",
-            "empty-catch", "throw-ex", "too-many-params",
-            "services-in-web", "missing-interface", "direct-instantiation"
-        ];
+        List<(string Rule, int Count, IReadOnlyList<ViolationResult> Violations)> results = [];
 
-        var results = allRules
-            .Select(rule =>
+        foreach (string rule in ViolationDetector.AllRuleKeys)
+        {
+            try
             {
-                try
-                {
-                    IReadOnlyList<ViolationResult> violations = detector.Detect(rule);
-                    IReadOnlyList<ViolationResult> capped = maxPerRule > 0 && violations.Count > maxPerRule
-                        ? [.. violations.Take(maxPerRule)]
-                        : violations;
-                    return (rule, count: violations.Count, violations: capped);
-                }
-                catch
-                {
-                    return (rule, count: 0, violations: (IReadOnlyList<ViolationResult>)[]);
-                }
-            })
-            .Where(r => r.count > 0)
-            .OrderByDescending(r => r.count)
-            .Select(r => new { r.rule, r.count, r.violations })
-            .ToList();
+                IReadOnlyList<ViolationResult> violations = await detector.DetectAsync(rule, ct);
+                if (violations.Count == 0)
+                    continue;
 
-        return Ok(results);
+                IReadOnlyList<ViolationResult> capped = maxPerRule > 0 && violations.Count > maxPerRule
+                    ? [.. violations.Take(maxPerRule)]
+                    : violations;
+                results.Add((rule, violations.Count, capped));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                // Rule unsupported for this workspace config — skip
+            }
+        }
+
+        return Ok(results
+            .OrderByDescending(r => r.Count)
+            .Select(r => new { rule = r.Rule, count = r.Count, violations = r.Violations })
+            .ToList());
     }
 
     [McpServerTool(Name = "find_dead_code")]
-    [Description("Find private methods, properties, and fields that have no references. Scoped to private members only. May be slow on large codebases — use projectFilter to narrow scope.")]
+    [Description("Find private methods, properties, and fields that have no references. Scoped to private members only. Use projectFilter to narrow scope.")]
     public async Task<string> FindDeadCode(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
         [Description("Filter to a specific project name (substring match)")] string? projectFilter = null,
@@ -273,7 +296,7 @@ public sealed class CSharpTools(
         if (index is null)
             return Err($"workspace '{workspace}' not found");
 
-        IReadOnlyList<DeadCodeResult> results = await index.FindDeadCodeAsync(projectFilter, ct);
+        IReadOnlyList<DeadCodeResult> results = await new ReferenceQueries(index).FindDeadCodeAsync(projectFilter, ct);
         return Ok(results);
     }
 
@@ -289,7 +312,10 @@ public sealed class CSharpTools(
         if (index is null)
             return Err($"workspace '{workspace}' not found");
 
-        IReadOnlyList<CallerResult> results = await index.FindCallersAsync(typeName, methodName, ct);
+        if (AmbiguityError(index, typeName) is string ambiguous)
+            return ambiguous;
+
+        IReadOnlyList<CallerResult> results = await new ReferenceQueries(index).FindCallersAsync(typeName, methodName, ct);
         return Ok(results);
     }
 
@@ -305,7 +331,7 @@ public sealed class CSharpTools(
         if (index is null)
             return Err($"workspace '{workspace}' not found");
 
-        IReadOnlyList<TypeCoupling> results = index.GetCoupling(projectFilter, minCoupling);
+        IReadOnlyList<TypeCoupling> results = new CouplingAnalyzer(index).GetCoupling(projectFilter, minCoupling);
         return Ok(results);
     }
 
@@ -321,7 +347,7 @@ public sealed class CSharpTools(
         if (index is null)
             return Err($"workspace '{workspace}' not found");
 
-        return Ok(index.GetHotspots(topN, projectFilter));
+        return Ok(await new RiskAnalyzer(index).GetHotspotsAsync(topN, projectFilter, ct));
     }
 
     [McpServerTool(Name = "find_circular_dependencies")]
@@ -349,7 +375,10 @@ public sealed class CSharpTools(
         if (index is null)
             return Err($"workspace '{workspace}' not found");
 
-        ChangeRiskResult? result = await index.GetChangeRiskAsync(typeName, ct);
+        if (AmbiguityError(index, typeName) is string ambiguous)
+            return ambiguous;
+
+        ChangeRiskResult? result = await new RiskAnalyzer(index).GetChangeRiskAsync(typeName, ct);
         if (result is null)
             return Err("type not found");
 
@@ -360,7 +389,7 @@ public sealed class CSharpTools(
     [Description("Run a specific architectural rule across the workspace. Rules: core-no-ef, core-no-http, core-no-azure, usecase-not-sealed, inline-viewmodel-razor, business-logic-in-razor, json-parsing-in-view, blazor-injects-infra, controller-not-thin, dto-in-core, missing-cancellation-token, no-async-void, async-over-sync, use-case-not-thin, empty-catch, throw-ex, layer-boundary, too-many-params, services-in-web, missing-interface, direct-instantiation.")]
     public async Task<string> FindViolations(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
-        [Description("Rule key: core-no-ef, core-no-http, core-no-azure, usecase-not-sealed, inline-viewmodel-razor, business-logic-in-razor, json-parsing-in-view, blazor-injects-infra, controller-not-thin, dto-in-core, missing-cancellation-token, no-async-void, async-over-sync, use-case-not-thin, empty-catch, throw-ex, layer-boundary, too-many-params, services-in-web, missing-interface, direct-instantiation")] string rule,
+        [Description("Rule key (see tool description for the full list)")] string rule,
         [Description("Filter results to a specific project name (substring match on file path)")] string? projectFilter = null,
         CancellationToken ct = default)
     {
@@ -373,7 +402,7 @@ public sealed class CSharpTools(
 
         try
         {
-            IReadOnlyList<ViolationResult> violations = detector.Detect(rule);
+            IReadOnlyList<ViolationResult> violations = await detector.DetectAsync(rule, ct);
 
             if (projectFilter is not null)
             {
@@ -408,196 +437,11 @@ public sealed class CSharpTools(
             ? filePath
             : Path.GetFullPath(Path.Combine(solutionDir, filePath));
 
-        string extension = Path.GetExtension(fullPath).ToLowerInvariant();
-        string fileType = extension == ".razor" ? "razor" : "cs";
+        if (!File.Exists(fullPath))
+            return Err($"file not found: {fullPath}");
 
-        List<object> observations = [];
-
-        if (fileType == "razor")
-        {
-            BlazorCodeBlock? codeBlock = BlazorFilePreprocessor.ExtractCodeBlock(fullPath);
-            if (codeBlock is null)
-                return Ok(new { filePath, fileType, observations = Array.Empty<object>() });
-
-            Microsoft.CodeAnalysis.SyntaxTree tree = CSharpSyntaxTree.ParseText(codeBlock.Source);
-            Microsoft.CodeAnalysis.SyntaxNode root = tree.GetRoot();
-
-            foreach (ClassDeclarationSyntax classDecl in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
-            {
-                string name = classDecl.Identifier.Text;
-                observations.Add(new
-                {
-                    kind = "inline-type",
-                    location = name,
-                    detail = $"Class '{name}' defined inline in @code block"
-                });
-            }
-
-            foreach (InvocationExpressionSyntax invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
-            {
-                string expr = invocation.Expression.ToString();
-
-                if (expr.Contains("UseCase", StringComparison.OrdinalIgnoreCase))
-                {
-                    int lineInBlock = invocation.GetLocation().GetLineSpan().StartLinePosition.Line;
-                    int line = codeBlock.LineOffset + lineInBlock;
-                    observations.Add(new
-                    {
-                        kind = "business-logic-in-view",
-                        location = $"line {line}",
-                        detail = $"Use case invoked directly: {expr}"
-                    });
-                    continue;
-                }
-
-                string[] projectionMethods = ["SelectMany", "GroupBy", "ToDictionary"];
-                string? matchedMethod = projectionMethods.FirstOrDefault(m =>
-                    expr.EndsWith("." + m, StringComparison.OrdinalIgnoreCase)
-                    || expr.Equals(m, StringComparison.OrdinalIgnoreCase));
-
-                if (matchedMethod is not null)
-                {
-                    int lineInBlock = invocation.GetLocation().GetLineSpan().StartLinePosition.Line;
-                    int line = codeBlock.LineOffset + lineInBlock;
-                    observations.Add(new
-                    {
-                        kind = "data-assembly-in-component",
-                        location = $"line {line}",
-                        detail = $"LINQ projection '{matchedMethod}' in component"
-                    });
-                }
-            }
-
-            string[] jsonIdentifiers = ["JsonDocument", "JsonSerializer"];
-            foreach (IdentifierNameSyntax identifier in root.DescendantNodes().OfType<IdentifierNameSyntax>())
-            {
-                string name = identifier.Identifier.Text;
-                if (!jsonIdentifiers.Contains(name, StringComparer.Ordinal))
-                    continue;
-
-                int lineInBlock = identifier.GetLocation().GetLineSpan().StartLinePosition.Line;
-                int line = codeBlock.LineOffset + lineInBlock;
-                observations.Add(new
-                {
-                    kind = "json-parsing-in-view",
-                    location = $"line {line}",
-                    detail = $"'{name}' used in component"
-                });
-            }
-
-            foreach (MethodDeclarationSyntax method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
-            {
-                bool isPublic = method.Modifiers.Any(m => m.Text == "public");
-                bool isAsync = method.Modifiers.Any(m => m.Text == "async");
-                if (!isPublic || !isAsync)
-                    continue;
-
-                bool hasCancellationToken = method.ParameterList.Parameters.Any(p =>
-                    p.Type?.ToString().Contains("CancellationToken", StringComparison.Ordinal) == true);
-
-                if (!hasCancellationToken)
-                {
-                    string methodName = method.Identifier.Text;
-                    observations.Add(new
-                    {
-                        kind = "missing-cancellation-token",
-                        location = methodName,
-                        detail = $"Public async method '{methodName}' has no CancellationToken parameter"
-                    });
-                }
-            }
-        }
-        else
-        {
-            if (!File.Exists(fullPath))
-                return Err($"file not found: {fullPath}");
-
-            string source = File.ReadAllText(fullPath);
-            Microsoft.CodeAnalysis.SyntaxTree tree = CSharpSyntaxTree.ParseText(source);
-            Microsoft.CodeAnalysis.SyntaxNode root = tree.GetRoot();
-
-            foreach (MethodDeclarationSyntax method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
-            {
-                bool isPublic = method.Modifiers.Any(m => m.Text == "public");
-                bool isAsync = method.Modifiers.Any(m => m.Text == "async");
-                if (!isPublic || !isAsync)
-                    continue;
-
-                bool hasCancellationToken = method.ParameterList.Parameters.Any(p =>
-                    p.Type?.ToString().Contains("CancellationToken", StringComparison.Ordinal) == true);
-
-                if (!hasCancellationToken)
-                {
-                    string methodName = method.Identifier.Text;
-                    observations.Add(new
-                    {
-                        kind = "missing-cancellation-token",
-                        location = methodName,
-                        detail = $"Public async method '{methodName}' has no CancellationToken parameter"
-                    });
-                }
-            }
-
-            CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
-
-            if (!string.IsNullOrEmpty(ca.CoreProject))
-            {
-                string normalizedPath = fullPath.Replace('\\', '/');
-
-                string? layer = null;
-                if (normalizedPath.Contains("/" + ca.CoreProject + "/", StringComparison.OrdinalIgnoreCase)
-                    || normalizedPath.Contains("\\" + ca.CoreProject + "\\", StringComparison.OrdinalIgnoreCase))
-                    layer = "core";
-                else if (normalizedPath.Contains("/" + ca.InfraProject + "/", StringComparison.OrdinalIgnoreCase)
-                    || normalizedPath.Contains("\\" + ca.InfraProject + "\\", StringComparison.OrdinalIgnoreCase))
-                    layer = "infrastructure";
-                else if (normalizedPath.Contains("/" + ca.WebProject + "/", StringComparison.OrdinalIgnoreCase)
-                    || normalizedPath.Contains("\\" + ca.WebProject + "\\", StringComparison.OrdinalIgnoreCase))
-                    layer = "web";
-
-                if (layer == "core")
-                {
-                    foreach (UsingDirectiveSyntax usingDirective in root.DescendantNodes().OfType<UsingDirectiveSyntax>())
-                    {
-                        string ns = usingDirective.Name?.ToString() ?? string.Empty;
-
-                        if (ns.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.OrdinalIgnoreCase))
-                        {
-                            int lineNumber = usingDirective.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                            observations.Add(new
-                            {
-                                kind = "layer-violation",
-                                location = $"line {lineNumber}",
-                                detail = $"Core project must not reference EF Core. Found: using {ns}"
-                            });
-                        }
-                        else if (ns.Equals("System.Net.Http", StringComparison.OrdinalIgnoreCase)
-                            || ns.Contains("IHttpClientFactory", StringComparison.OrdinalIgnoreCase))
-                        {
-                            int lineNumber = usingDirective.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                            observations.Add(new
-                            {
-                                kind = "layer-violation",
-                                location = $"line {lineNumber}",
-                                detail = $"Core project must not reference HTTP types. Found: using {ns}"
-                            });
-                        }
-                        else if (ns.StartsWith("Azure.", StringComparison.OrdinalIgnoreCase)
-                            || ns.StartsWith("Microsoft.Azure.", StringComparison.OrdinalIgnoreCase))
-                        {
-                            int lineNumber = usingDirective.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                            observations.Add(new
-                            {
-                                kind = "layer-violation",
-                                location = $"line {lineNumber}",
-                                detail = $"Core project must not reference Azure SDK. Found: using {ns}"
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        return Ok(new { filePath, fileType, observations });
+        CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
+        FileAnalysis analysis = FileAnalyzer.Analyze(fullPath, ca);
+        return Ok(analysis);
     }
 }

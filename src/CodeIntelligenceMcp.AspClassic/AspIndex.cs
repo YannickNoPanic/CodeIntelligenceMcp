@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using CodeIntelligenceMcp.AspClassic.Models;
+using CodeIntelligenceMcp.Common;
 
 namespace CodeIntelligenceMcp.AspClassic;
 
@@ -29,73 +31,85 @@ public sealed class AspIndex
 
     public int FileCount => _files.Count;
 
-    public static AspIndex Build(string rootPath, Action<string>? log = null)
+    public static AspIndex Build(string rootPath, Action<string>? log = null, CancellationToken ct = default)
     {
-        var files = new Dictionary<string, AspFileInfo>(StringComparer.OrdinalIgnoreCase);
-        var allSql = new List<(string FilePath, SqlQueryInfo Query)>();
+        ConcurrentDictionary<string, AspFileInfo> files = new(StringComparer.OrdinalIgnoreCase);
+        ConcurrentDictionary<string, List<SqlQueryInfo>> sqlByFile = new(StringComparer.OrdinalIgnoreCase);
         int fallbackCount = 0;
         int expressionBlockCount = 0;
         int totalBlockCount = 0;
 
-        foreach (string filePath in Directory.EnumerateFiles(rootPath, "*.asp", SearchOption.AllDirectories))
+        string[] skipDirs = [".git", ".vs", "node_modules", "bin", "obj"];
+        List<string> sourceFiles = [.. SourceFileWalker.EnumerateFiles(rootPath, [".asp"], skipDirs, ct)];
+
+        Parallel.ForEach(sourceFiles, new ParallelOptions { CancellationToken = ct }, filePath =>
         {
             string content;
             try
             {
                 content = File.ReadAllText(filePath);
             }
-            catch (IOException)
+            catch (Exception ex)
             {
-                log?.Invoke($"[warn] Could not read file: {filePath}");
-                continue;
+                log?.Invoke($"[warn] Could not read file {filePath}: {ex.Message}");
+                return;
             }
 
-            IReadOnlyList<IncludeRef> includes = ExtractIncludes(content, filePath, rootPath);
-            IReadOnlyList<VbscriptBlock> blocks = AspBlockExtractor.Extract(content);
-
-            var subs = new List<SubInfo>();
-            var functions = new List<FunctionInfo>();
-            var variables = new List<VariableInfo>();
-            var sqlQueries = new List<SqlQueryInfo>();
-
-            foreach (VbscriptBlock block in blocks)
+            try
             {
-                totalBlockCount++;
+                IReadOnlyList<IncludeRef> includes = ExtractIncludes(content, filePath, rootPath);
+                IReadOnlyList<VbscriptBlock> blocks = AspBlockExtractor.Extract(content);
 
-                if (block.IsExpression)
+                var subs = new List<SubInfo>();
+                var functions = new List<FunctionInfo>();
+                var variables = new List<VariableInfo>();
+                var sqlQueries = new List<SqlQueryInfo>();
+
+                foreach (VbscriptBlock block in blocks)
                 {
-                    expressionBlockCount++;
-                    continue;
-                }
+                    Interlocked.Increment(ref totalBlockCount);
 
-                Action<string>? blockLog = log is not null
-                    ? msg => { fallbackCount++; log($"  {filePath}:{block.LineStart} — {msg}"); }
+                    if (block.IsExpression)
+                    {
+                        Interlocked.Increment(ref expressionBlockCount);
+                        continue;
+                    }
+
+                    Action<string>? blockLog = log is not null
+                        ? msg => { Interlocked.Increment(ref fallbackCount); log($"  {filePath}:{block.LineStart} — {msg}"); }
                     : null;
 
-                ParsedBlock parsed = VbscriptParserAdapter.Parse(block.Source, block.LineStart, blockLog);
-                subs.AddRange(parsed.Subs);
-                functions.AddRange(parsed.Functions);
-                variables.AddRange(parsed.Variables);
+                    ParsedBlock parsed = VbscriptParserAdapter.Parse(block.Source, block.LineStart, blockLog);
+                    subs.AddRange(parsed.Subs);
+                    functions.AddRange(parsed.Functions);
+                    variables.AddRange(parsed.Variables);
 
-                IReadOnlyList<SqlQueryInfo> blockSql = SqlExtractor.Extract(block.Source, block.LineStart);
-                sqlQueries.AddRange(blockSql);
+                    IReadOnlyList<SqlQueryInfo> blockSql = SqlExtractor.Extract(block.Source, block.LineStart);
+                    sqlQueries.AddRange(blockSql);
+                }
+
+                AspFileInfo fileInfo = new(
+                    filePath,
+                    includes,
+                    subs,
+                    functions,
+                    variables,
+                    blocks);
+
+                files[filePath] = fileInfo;
+
+                if (sqlQueries.Count > 0)
+                    sqlByFile[filePath] = sqlQueries;
             }
-
-            AspFileInfo fileInfo = new(
-                filePath,
-                includes,
-                subs,
-                functions,
-                variables,
-                blocks);
-
-            files[filePath] = fileInfo;
-
-            foreach (SqlQueryInfo query in sqlQueries)
+            catch (Exception ex)
             {
-                allSql.Add((filePath, query));
+                log?.Invoke($"[warn] Failed to parse {filePath}: {ex.Message}");
             }
-        }
+        });
+
+        List<(string FilePath, SqlQueryInfo Query)> allSql = [.. sqlByFile
+            .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
+            .SelectMany(kvp => kvp.Value.Select(q => (kvp.Key, q)))];
 
         log?.Invoke($"[info] ASP index complete: {files.Count} files, {totalBlockCount} blocks ({expressionBlockCount} expression blocks skipped, {fallbackCount} blocks used regex fallback)");
 

@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using CodeIntelligenceMcp.Common;
 using CodeIntelligenceMcp.PowerShell.Models;
 
 namespace CodeIntelligenceMcp.PowerShell;
@@ -20,21 +22,21 @@ public sealed class PowerShellIndex
 
     public int FileCount => _files.Count;
 
-    public static PowerShellIndex Build(string rootPath, Action<string>? log = null)
+    public static PowerShellIndex Build(string rootPath, Action<string>? log = null, CancellationToken ct = default)
     {
-        var files = new Dictionary<string, PowerShellFileInfo>(StringComparer.OrdinalIgnoreCase);
+        ConcurrentDictionary<string, PowerShellFileInfo> files = new(StringComparer.OrdinalIgnoreCase);
         var manifests = new List<PowerShellModuleManifest>();
 
-        string[] scriptExtensions = ["*.ps1", "*.psm1"];
         string[] skipDirs = [".git", "node_modules", ".vs", ".idea", "bin", "obj"];
 
-        foreach (string filePath in EnumerateFiles(rootPath, scriptExtensions, skipDirs))
+        List<string> scriptFiles = [.. SourceFileWalker.EnumerateFiles(rootPath, [".ps1", ".psm1"], skipDirs, ct)];
+
+        Parallel.ForEach(scriptFiles, new ParallelOptions { CancellationToken = ct }, filePath =>
         {
             try
             {
                 string content = File.ReadAllText(filePath);
-                PowerShellFileInfo info = PowerShellScriptParser.Parse(filePath, content);
-                files[filePath] = info;
+                files[filePath] = PowerShellScriptParser.Parse(filePath, content);
             }
             catch (IOException ex)
             {
@@ -44,9 +46,9 @@ public sealed class PowerShellIndex
             {
                 log?.Invoke($"[warn] Failed to parse {filePath}: {ex.Message}");
             }
-        }
+        });
 
-        foreach (string filePath in EnumerateFiles(rootPath, ["*.psd1"], skipDirs))
+        foreach (string filePath in SourceFileWalker.EnumerateFiles(rootPath, [".psd1"], skipDirs, ct))
         {
             try
             {
@@ -151,15 +153,4 @@ public sealed class PowerShellIndex
 
     public string RootPath => _rootPath;
 
-    private static IEnumerable<string> EnumerateFiles(
-        string rootPath,
-        string[] patterns,
-        string[] skipDirs)
-    {
-        return patterns.SelectMany(pattern =>
-            Directory.EnumerateFiles(rootPath, pattern, SearchOption.AllDirectories)
-                .Where(f => !skipDirs.Any(skip =>
-                    f.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                        .Any(segment => string.Equals(segment, skip, StringComparison.OrdinalIgnoreCase)))));
-    }
 }

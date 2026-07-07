@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Logging;
-
 namespace CodeIntelligenceMcp.Logging;
 
 internal sealed class FileLoggerProvider : ILoggerProvider
@@ -34,10 +32,10 @@ internal sealed class FileLogger(string category, StreamWriter writer, object lo
         string level = logLevel switch
         {
             LogLevel.Information => "INF",
-            LogLevel.Warning     => "WRN",
-            LogLevel.Error       => "ERR",
-            LogLevel.Critical    => "CRT",
-            _                    => "DBG"
+            LogLevel.Warning => "WRN",
+            LogLevel.Error => "ERR",
+            LogLevel.Critical => "CRT",
+            _ => "DBG"
         };
 
         string shortCategory = category.Contains('.')

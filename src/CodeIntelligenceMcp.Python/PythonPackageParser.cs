@@ -7,7 +7,7 @@ namespace CodeIntelligenceMcp.Python;
 
 public static class PythonPackageParser
 {
-    public static PythonProjectInfo ParseProjectInfo(string rootPath)
+    public static PythonProjectInfo ParseProjectInfo(string rootPath, Action<string>? log = null)
     {
         string? projectName = null;
         string? pythonVersion = null;
@@ -22,9 +22,9 @@ public static class PythonPackageParser
             {
                 ParsePyprojectToml(pyprojectPath, ref projectName, ref pythonVersion, dependencies, devDependencies);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Fall through to other sources
+                log?.Invoke($"[warn] Failed to parse {pyprojectPath}: {ex.Message} — falling back to other sources");
             }
         }
 
@@ -36,9 +36,9 @@ public static class PythonPackageParser
             {
                 ParseRequirementsTxt(requirementsPath, "requirements.txt", dependencies);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Ignore parse errors
+                log?.Invoke($"[warn] Failed to parse {requirementsPath}: {ex.Message}");
             }
         }
 
@@ -52,8 +52,14 @@ public static class PythonPackageParser
         {
             if (File.Exists(devReqPath))
             {
-                try { ParseRequirementsTxt(devReqPath, Path.GetFileName(devReqPath), devDependencies); }
-                catch (Exception) { }
+                try
+                {
+                    ParseRequirementsTxt(devReqPath, Path.GetFileName(devReqPath), devDependencies);
+                }
+                catch (Exception ex)
+                {
+                    log?.Invoke($"[warn] Failed to parse {devReqPath}: {ex.Message}");
+                }
             }
         }
 
@@ -61,8 +67,14 @@ public static class PythonPackageParser
         string setupCfgPath = Path.Combine(rootPath, "setup.cfg");
         if (File.Exists(setupCfgPath) && dependencies.Count == 0)
         {
-            try { ParseSetupCfg(setupCfgPath, ref projectName, dependencies, devDependencies); }
-            catch (Exception) { }
+            try
+            {
+                ParseSetupCfg(setupCfgPath, ref projectName, dependencies, devDependencies);
+            }
+            catch (Exception ex)
+            {
+                log?.Invoke($"[warn] Failed to parse {setupCfgPath}: {ex.Message}");
+            }
         }
 
         return new PythonProjectInfo(projectName, pythonVersion, dependencies, devDependencies);
