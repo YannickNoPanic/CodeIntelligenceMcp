@@ -233,7 +233,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         IEnumerable<IndexedType> query = _allTypes;
 
         if (nameContains is not null)
-            query = query.Where(t => t.Symbol.Name.Contains(nameContains, StringComparison.OrdinalIgnoreCase));
+            query = query.Where(t => SymbolQueryMatcher.Matches(nameContains, t.Symbol.Name));
 
         if (@namespace is not null)
         {
@@ -410,10 +410,18 @@ public sealed class RoslynWorkspaceIndex : IDisposable
     {
         List<SymbolSearchResult> results = [];
 
+        // Wildcard queries match on the bare symbol name; substring queries keep the historical
+        // FQN match so namespace fragments keep working.
+        bool wildcards = SymbolQueryMatcher.HasWildcards(query);
+
         foreach (IndexedType indexed in _allTypes)
         {
             string fqn = indexed.Symbol.ToDisplayString();
-            if (fqn.Contains(query, StringComparison.OrdinalIgnoreCase))
+            bool typeMatch = wildcards
+                ? SymbolQueryMatcher.Matches(query, indexed.Symbol.Name)
+                : fqn.Contains(query, StringComparison.OrdinalIgnoreCase);
+
+            if (typeMatch)
             {
                 results.Add(new SymbolSearchResult(
                     indexed.Symbol.Name,
@@ -428,8 +436,21 @@ public sealed class RoslynWorkspaceIndex : IDisposable
             {
                 if (member is IMethodSymbol or IPropertySymbol)
                 {
-                    string memberFqn = member.ToDisplayString();
-                    if (memberFqn.Contains(query, StringComparison.OrdinalIgnoreCase))
+                    // Compiler-generated members (record property accessors, EqualityContract,
+                    // synthesized constructors) are pure noise in search results.
+                    if (member.IsImplicitlyDeclared)
+                        continue;
+                    if (member is IMethodSymbol method
+                        && method.MethodKind is not (MethodKind.Ordinary or MethodKind.Constructor or MethodKind.LocalFunction))
+                        continue;
+                    if (member is IPropertySymbol { Name: "EqualityContract" })
+                        continue;
+
+                    bool memberMatch = wildcards
+                        ? SymbolQueryMatcher.Matches(query, member.Name)
+                        : member.ToDisplayString().Contains(query, StringComparison.OrdinalIgnoreCase);
+
+                    if (memberMatch)
                     {
                         Location? loc = member.Locations.FirstOrDefault(l => l.IsInSource);
                         int lineNumber = loc is not null

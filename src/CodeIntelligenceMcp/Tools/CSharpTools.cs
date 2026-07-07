@@ -53,11 +53,12 @@ public sealed class CSharpTools(
     [Description("Search for types by name, namespace, interface, attribute, or kind. Use to discover what exists in a domain without reading files.")]
     public async Task<string> FindTypes(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
-        [Description("Substring match on type name (case-insensitive)")] string? nameContains = null,
+        [Description("Type name filter: substring, or glob with * and ? (case-insensitive)")] string? nameContains = null,
         [Description("Exact or prefix namespace match")] string? @namespace = null,
         [Description("Interface name the type must implement")] string? implementsInterface = null,
         [Description("Attribute name the type must have")] string? hasAttribute = null,
         [Description("Type kind: class, interface, record, or enum")] string? kind = null,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
@@ -65,7 +66,7 @@ public sealed class CSharpTools(
             return error!;
 
         IReadOnlyList<TypeSummary> results = index.FindTypes(nameContains, @namespace, implementsInterface, hasAttribute, kind);
-        return ToolResponses.Ok(results);
+        return ToolResponses.OkList(results, maxResults);
     }
 
     [McpServerTool(Name = "get_method")]
@@ -95,6 +96,7 @@ public sealed class CSharpTools(
     public async Task<string> FindImplementations(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
         [Description("Interface name")] string interfaceName,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
@@ -102,7 +104,7 @@ public sealed class CSharpTools(
             return error!;
 
         IReadOnlyList<ImplementationSummary> results = index.FindImplementations(interfaceName);
-        return ToolResponses.Ok(results);
+        return ToolResponses.OkList(results, maxResults);
     }
 
     [McpServerTool(Name = "find_usages")]
@@ -110,6 +112,7 @@ public sealed class CSharpTools(
     public async Task<string> FindUsages(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
         [Description("Symbol name to find usages of")] string symbolName,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
@@ -120,7 +123,7 @@ public sealed class CSharpTools(
             return ambiguous;
 
         IReadOnlyList<UsageResult> results = await new ReferenceQueries(index).FindUsagesAsync(symbolName, ct);
-        return ToolResponses.Ok(results);
+        return ToolResponses.OkList(results, maxResults);
     }
 
     [McpServerTool(Name = "get_dependencies")]
@@ -174,10 +177,11 @@ public sealed class CSharpTools(
     }
 
     [McpServerTool(Name = "search_symbol")]
-    [Description("Search symbols (types, methods, properties) by substring. Use when you know part of a name but not the full path.")]
+    [Description("Search symbols (types, methods, properties) by substring or glob. Use when you know part of a name but not the full path. Compiler-generated members are excluded.")]
     public async Task<string> SearchSymbol(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
-        [Description("Substring query (case-insensitive)")] string query,
+        [Description("Query: substring (case-insensitive), or glob with * and ? matched against the symbol name")] string query,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
@@ -185,7 +189,7 @@ public sealed class CSharpTools(
             return error!;
 
         IReadOnlyList<SymbolSearchResult> results = index.SearchSymbol(query);
-        return ToolResponses.Ok(results);
+        return ToolResponses.OkList(results, maxResults);
     }
 
     [McpServerTool(Name = "scan_patterns")]
@@ -225,6 +229,7 @@ public sealed class CSharpTools(
         [Description("Filter to a specific project name (substring match)")] string? projectFilter = null,
         [Description("Also include methods with >= this many lines regardless of complexity (default 0 = disabled)")] int minLines = 0,
         [Description("Sort by 'complexity' (default) or 'lines'")] string sortBy = "complexity",
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
@@ -233,7 +238,7 @@ public sealed class CSharpTools(
 
         ComplexityAnalyzer analyzer = new(index);
         IReadOnlyList<MethodComplexity> results = await analyzer.AnalyzeAsync(minComplexity, projectFilter, minLines, sortBy, ct: ct);
-        return ToolResponses.Ok(results);
+        return ToolResponses.OkList(results, maxResults);
     }
 
     [McpServerTool(Name = "scan_all_violations")]
@@ -286,6 +291,7 @@ public sealed class CSharpTools(
     public async Task<string> FindDeadCode(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
         [Description("Filter to a specific project name (substring match)")] string? projectFilter = null,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
@@ -293,7 +299,7 @@ public sealed class CSharpTools(
             return error!;
 
         IReadOnlyList<DeadCodeResult> results = await new ReferenceQueries(index).FindDeadCodeAsync(projectFilter, ct);
-        return ToolResponses.Ok(results);
+        return ToolResponses.OkList(results, maxResults);
     }
 
     [McpServerTool(Name = "find_callers")]
@@ -302,6 +308,7 @@ public sealed class CSharpTools(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
         [Description("Type name that owns the method")] string typeName,
         [Description("Method name to find callers of")] string methodName,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
@@ -312,7 +319,7 @@ public sealed class CSharpTools(
             return ambiguous;
 
         IReadOnlyList<CallerResult> results = await new ReferenceQueries(index).FindCallersAsync(typeName, methodName, ct);
-        return ToolResponses.Ok(results);
+        return ToolResponses.OkList(results, maxResults);
     }
 
     [McpServerTool(Name = "get_coupling")]
@@ -321,6 +328,7 @@ public sealed class CSharpTools(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
         [Description("Only return types with coupling >= this threshold (default 5)")] int minCoupling = 5,
         [Description("Filter to a specific project name (substring match)")] string? projectFilter = null,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
@@ -328,7 +336,7 @@ public sealed class CSharpTools(
             return error!;
 
         IReadOnlyList<TypeCoupling> results = new CouplingAnalyzer(index).GetCoupling(projectFilter, minCoupling);
-        return ToolResponses.Ok(results);
+        return ToolResponses.OkList(results, maxResults);
     }
 
     [McpServerTool(Name = "get_hotspots")]
@@ -387,6 +395,7 @@ public sealed class CSharpTools(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
         [Description("Rule key (see tool description for the full list)")] string rule,
         [Description("Filter results to a specific project name (substring match on file path)")] string? projectFilter = null,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
@@ -407,7 +416,7 @@ public sealed class CSharpTools(
                     || (v.TypeName?.Contains(projectFilter, StringComparison.OrdinalIgnoreCase) == true))];
             }
 
-            return ToolResponses.Ok(violations);
+            return ToolResponses.OkList(violations, maxResults);
         }
         catch (ArgumentException ex)
         {

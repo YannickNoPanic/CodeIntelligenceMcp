@@ -280,4 +280,41 @@ public sealed class RoslynLookupTests
         result.Should().Contain(r => r.SymbolName == "CreateOrderUseCase");
         result.Should().NotContain(r => r.SymbolName == "CustomerService");
     }
+    [Fact]
+    public void SearchSymbol_Record_DoesNotReturnCompilerGeneratedMembers()
+    {
+        RoslynWorkspaceIndex index = BuildIndex((
+            "namespace MyApp.Core; public record GetThingRequest(string Name);",
+            "MyApp.Core",
+            "GetThingRequest.cs"));
+
+        IReadOnlyList<SymbolSearchResult> results = index.SearchSymbol("GetThing");
+
+        results.Should().NotContain(r => r.SymbolName == "EqualityContract" || r.SymbolName.StartsWith("get_"));
+        results.Should().Contain(r => r.SymbolName == "GetThingRequest");
+    }
+
+    [Fact]
+    public void SearchSymbol_WildcardQuery_MatchesGlobOnSymbolName()
+    {
+        RoslynWorkspaceIndex index = BuildIndex(
+            ("namespace MyApp.Core; public class GetHowTosUseCase { }", "MyApp.Core", "A.cs"),
+            ("namespace MyApp.Core; public class CreateHowToUseCase { }", "MyApp.Core", "B.cs"));
+
+        IReadOnlyList<SymbolSearchResult> results = index.SearchSymbol("Get*UseCase");
+
+        results.Should().ContainSingle(r => r.SymbolName == "GetHowTosUseCase");
+    }
+
+    [Fact]
+    public void FindTypes_WildcardNameContains_MatchesGlob()
+    {
+        RoslynWorkspaceIndex index = BuildIndex(
+            ("namespace MyApp.Core; public class GetHowTosUseCase { }", "MyApp.Core", "A.cs"),
+            ("namespace MyApp.Core; public class CreateHowToUseCase { }", "MyApp.Core", "B.cs"));
+
+        IReadOnlyList<TypeSummary> results = index.FindTypes(nameContains: "Get*UseCase");
+
+        results.Should().ContainSingle(r => r.Name == "GetHowTosUseCase");
+    }
 }

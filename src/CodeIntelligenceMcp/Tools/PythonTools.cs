@@ -42,7 +42,8 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider, 
     [Description("Find Python functions and methods by name across all files in the workspace.")]
     public async Task<string> PyFindFunction(
         [Description("Workspace name")] string workspace,
-        [Description("Function name or partial name (case-insensitive)")] string functionName,
+        [Description("Function name: substring, or glob with * and ? (case-insensitive)")] string functionName,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (PythonIndex? index, string? error) = await WorkspaceAccess.GetAsync(pythonProvider, config, "python", workspace, ct);
@@ -69,14 +70,15 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider, 
             returnTypeHint = r.Function.ReturnTypeHint
         }).ToArray();
 
-        return ToolResponses.Ok(mapped);
+        return ToolResponses.OkList(mapped, maxResults);
     }
 
     [McpServerTool(Name = "py_find_class")]
     [Description("Find Python classes by name across all files in the workspace.")]
     public async Task<string> PyFindClass(
         [Description("Workspace name")] string workspace,
-        [Description("Class name or partial name (case-insensitive)")] string className,
+        [Description("Class name: substring, or glob with * and ? (case-insensitive)")] string className,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (PythonIndex? index, string? error) = await WorkspaceAccess.GetAsync(pythonProvider, config, "python", workspace, ct);
@@ -96,14 +98,15 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider, 
             methods = r.Class.Methods.Select(m => m.Name)
         }).ToArray();
 
-        return ToolResponses.Ok(mapped);
+        return ToolResponses.OkList(mapped, maxResults);
     }
 
     [McpServerTool(Name = "py_search")]
     [Description("Search for a term across function names, class names, and import paths in a Python workspace.")]
     public async Task<string> PySearch(
         [Description("Workspace name")] string workspace,
-        [Description("Search term")] string query,
+        [Description("Search term: substring, or glob with * and ? (case-insensitive)")] string query,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (PythonIndex? index, string? error) = await WorkspaceAccess.GetAsync(pythonProvider, config, "python", workspace, ct);
@@ -119,6 +122,6 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider, 
             context = r.Context
         }).ToArray();
 
-        return ToolResponses.Ok(mapped);
+        return ToolResponses.OkList(mapped, maxResults);
     }
 }

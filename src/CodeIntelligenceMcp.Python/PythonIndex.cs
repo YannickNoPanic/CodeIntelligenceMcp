@@ -88,7 +88,7 @@ public sealed class PythonIndex
         {
             foreach (PythonFunctionInfo func in fileInfo.Functions)
             {
-                if (func.Name.Contains(functionName, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(functionName, func.Name))
                     result.Add((filePath, func));
             }
 
@@ -96,7 +96,7 @@ public sealed class PythonIndex
             {
                 foreach (PythonFunctionInfo method in cls.Methods)
                 {
-                    if (method.Name.Contains(functionName, StringComparison.OrdinalIgnoreCase))
+                    if (NameMatcher.Matches(functionName, method.Name))
                         result.Add((filePath, method));
                 }
             }
@@ -113,7 +113,7 @@ public sealed class PythonIndex
         {
             foreach (PythonClassInfo cls in fileInfo.Classes)
             {
-                if (cls.Name.Contains(className, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(className, cls.Name))
                     result.Add((filePath, cls));
             }
         }
@@ -129,25 +129,25 @@ public sealed class PythonIndex
         {
             foreach (PythonFunctionInfo func in fileInfo.Functions)
             {
-                if (func.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(query, func.Name))
                     result.Add((filePath, func.LineStart, $"function {func.Name}"));
             }
 
             foreach (PythonClassInfo cls in fileInfo.Classes)
             {
-                if (cls.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(query, cls.Name))
                     result.Add((filePath, cls.LineStart, $"class {cls.Name}"));
 
                 foreach (PythonFunctionInfo method in cls.Methods)
                 {
-                    if (method.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                    if (NameMatcher.Matches(query, method.Name))
                         result.Add((filePath, method.LineStart, $"method {cls.Name}.{method.Name}"));
                 }
             }
 
             foreach (PythonImportInfo import in fileInfo.Imports)
             {
-                if (import.Module.Contains(query, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(query, import.Module))
                     result.Add((filePath, import.Line, $"import {import.Module}"));
             }
         }

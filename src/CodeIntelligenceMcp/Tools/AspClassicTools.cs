@@ -25,7 +25,8 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider, Mc
     [Description("Find subs, functions, variables, or call sites by name across all ASP files. Use to locate where something is defined or called.")]
     public async Task<string> AspFindSymbol(
         [Description("Workspace name from mcp-config.json, or absolute path to an ASP root directory for ad-hoc use")] string workspace,
-        [Description("Symbol name to find")] string symbolName,
+        [Description("Symbol name to find (whole-word match)")] string symbolName,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, config, "asp-classic", workspace, ct);
@@ -42,7 +43,7 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider, Mc
             context = r.Context
         }).ToArray();
 
-        return ToolResponses.Ok(mapped);
+        return ToolResponses.OkList(mapped, maxResults);
     }
 
     [McpServerTool(Name = "asp_get_includes")]
@@ -82,6 +83,7 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider, Mc
     public async Task<string> AspSearch(
         [Description("Workspace name from mcp-config.json, or absolute path to an ASP root directory for ad-hoc use")] string workspace,
         [Description("Search query (case-insensitive substring)")] string query,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, config, "asp-classic", workspace, ct);
@@ -97,6 +99,6 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider, Mc
             context = r.Context
         }).ToArray();
 
-        return ToolResponses.Ok(mapped);
+        return ToolResponses.OkList(mapped, maxResults);
     }
 }

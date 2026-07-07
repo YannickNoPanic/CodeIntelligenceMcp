@@ -106,7 +106,7 @@ public sealed class JsIndex
         {
             foreach (JsFunctionInfo func in fileInfo.Functions)
             {
-                if (func.Name.Contains(functionName, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(functionName, func.Name))
                     result.Add((filePath, func));
             }
 
@@ -114,7 +114,7 @@ public sealed class JsIndex
             {
                 foreach (JsFunctionInfo method in cls.Methods)
                 {
-                    if (method.Name.Contains(functionName, StringComparison.OrdinalIgnoreCase))
+                    if (NameMatcher.Matches(functionName, method.Name))
                         result.Add((filePath, method));
                 }
             }
@@ -126,7 +126,7 @@ public sealed class JsIndex
             if (vue.ScriptAnalysis is null) continue;
             foreach (JsFunctionInfo func in vue.ScriptAnalysis.Functions)
             {
-                if (func.Name.Contains(functionName, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(functionName, func.Name))
                     result.Add((vue.FilePath, func));
             }
         }
@@ -142,7 +142,7 @@ public sealed class JsIndex
         {
             foreach (JsClassInfo cls in fileInfo.Classes)
             {
-                if (cls.Name.Contains(className, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(className, cls.Name))
                     result.Add((filePath, cls));
             }
         }
@@ -158,31 +158,31 @@ public sealed class JsIndex
         {
             foreach (JsFunctionInfo func in fileInfo.Functions)
             {
-                if (func.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(query, func.Name))
                     result.Add((filePath, func.LineStart, $"function {func.Name}"));
             }
 
             foreach (JsClassInfo cls in fileInfo.Classes)
             {
-                if (cls.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(query, cls.Name))
                     result.Add((filePath, cls.LineStart, $"class {cls.Name}"));
             }
 
             foreach (JsExportInfo export in fileInfo.Exports)
             {
-                if (export.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(query, export.Name))
                     result.Add((filePath, export.Line, $"export {export.Name}"));
             }
 
             foreach (JsImportInfo import in fileInfo.Imports)
             {
-                if (import.Source.Contains(query, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(query, import.Source))
                     result.Add((filePath, import.Line, $"import from {import.Source}"));
             }
 
             foreach (JsInterfaceInfo iface in fileInfo.Interfaces)
             {
-                if (iface.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(query, iface.Name))
                     result.Add((filePath, iface.LineStart, $"interface {iface.Name}"));
             }
         }
@@ -190,7 +190,7 @@ public sealed class JsIndex
         foreach (VueSfcInfo vue in _vueComponents)
         {
             string componentName = Path.GetFileNameWithoutExtension(vue.FilePath);
-            if (componentName.Contains(query, StringComparison.OrdinalIgnoreCase))
+            if (NameMatcher.Matches(query, componentName))
                 result.Add((vue.FilePath, 1, $"component {componentName}"));
         }
 

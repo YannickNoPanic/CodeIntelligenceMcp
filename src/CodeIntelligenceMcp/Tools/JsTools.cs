@@ -50,7 +50,8 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider, McpConfig co
     [Description("Find JavaScript/TypeScript functions by name across all files in the workspace, including Vue SFC script blocks.")]
     public async Task<string> JsFindFunction(
         [Description("Workspace name")] string workspace,
-        [Description("Function name or partial name (case-insensitive)")] string functionName,
+        [Description("Function name: substring, or glob with * and ? (case-insensitive)")] string functionName,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, config, "javascript", workspace, ct);
@@ -71,14 +72,15 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider, McpConfig co
             isGenerator = r.Function.IsGenerator
         }).ToArray();
 
-        return ToolResponses.Ok(mapped);
+        return ToolResponses.OkList(mapped, maxResults);
     }
 
     [McpServerTool(Name = "js_find_class")]
     [Description("Find JavaScript/TypeScript classes by name across all files in the workspace.")]
     public async Task<string> JsFindClass(
         [Description("Workspace name")] string workspace,
-        [Description("Class name or partial name (case-insensitive)")] string className,
+        [Description("Class name: substring, or glob with * and ? (case-insensitive)")] string className,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, config, "javascript", workspace, ct);
@@ -99,14 +101,15 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider, McpConfig co
             methods = r.Class.Methods.Select(m => m.Name)
         }).ToArray();
 
-        return ToolResponses.Ok(mapped);
+        return ToolResponses.OkList(mapped, maxResults);
     }
 
     [McpServerTool(Name = "js_search")]
     [Description("Search for a term across function names, class names, exports, and import paths in a JavaScript/TypeScript workspace.")]
     public async Task<string> JsSearch(
         [Description("Workspace name")] string workspace,
-        [Description("Search term")] string query,
+        [Description("Search term: substring, or glob with * and ? (case-insensitive)")] string query,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, config, "javascript", workspace, ct);
@@ -122,6 +125,6 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider, McpConfig co
             context = r.Context
         }).ToArray();
 
-        return ToolResponses.Ok(mapped);
+        return ToolResponses.OkList(mapped, maxResults);
     }
 }

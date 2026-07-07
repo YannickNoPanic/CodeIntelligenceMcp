@@ -42,7 +42,8 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
     [Description("Find PowerShell functions by name across all scripts in the workspace.")]
     public async Task<string> PsFindFunction(
         [Description("Workspace name from mcp-config.json, or absolute path to a PS root directory for ad-hoc use")] string workspace,
-        [Description("Function name or partial name to search for")] string functionName,
+        [Description("Function name: substring, or glob with * and ? (case-insensitive)")] string functionName,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, config, "powershell", workspace, ct);
@@ -58,7 +59,7 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
             functionName = r.Function.Name,
             lineStart = r.Function.LineStart,
             lineEnd = r.Function.LineEnd,
-            hassCmdletBinding = r.Function.HasCmdletBinding,
+            hasCmdletBinding = r.Function.HasCmdletBinding,
             supportsPipeline = r.Function.SupportsPipeline,
             hasTryCatch = r.Function.HasTryCatch,
             parameters = r.Function.Parameters.Select(p => new
@@ -71,7 +72,7 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
             })
         }).ToArray();
 
-        return ToolResponses.Ok(mapped);
+        return ToolResponses.OkList(mapped, maxResults);
     }
 
     [McpServerTool(Name = "ps_get_modules")]
@@ -91,7 +92,8 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
     [Description("Search for a term across function names, parameter names, and variables in a PowerShell workspace.")]
     public async Task<string> PsSearch(
         [Description("Workspace name from mcp-config.json, or absolute path to a PS root directory for ad-hoc use")] string workspace,
-        [Description("Search term")] string query,
+        [Description("Search term: substring, or glob with * and ? (case-insensitive)")] string query,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
         (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, config, "powershell", workspace, ct);
@@ -108,6 +110,6 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
             context = r.Context
         }).ToArray();
 
-        return ToolResponses.Ok(mapped);
+        return ToolResponses.OkList(mapped, maxResults);
     }
 }

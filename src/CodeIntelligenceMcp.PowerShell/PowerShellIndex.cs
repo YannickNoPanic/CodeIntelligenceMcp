@@ -95,7 +95,7 @@ public sealed class PowerShellIndex
         {
             foreach (PowerShellFunctionInfo func in fileInfo.Functions)
             {
-                if (func.Name.Contains(functionName, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(functionName, func.Name))
                     result.Add((filePath, func));
             }
         }
@@ -124,7 +124,7 @@ public sealed class PowerShellIndex
             // Search in function names
             foreach (PowerShellFunctionInfo func in fileInfo.Functions)
             {
-                if (func.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(query, func.Name))
                     result.Add((filePath, func.LineStart, $"function {func.Name}"));
             }
 
@@ -133,7 +133,7 @@ public sealed class PowerShellIndex
             {
                 foreach (PowerShellParameterInfo param in func.Parameters)
                 {
-                    if (param.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                    if (NameMatcher.Matches(query, param.Name))
                         result.Add((filePath, func.LineStart, $"parameter ${param.Name} in {func.Name}"));
                 }
             }
@@ -141,7 +141,7 @@ public sealed class PowerShellIndex
             // Search in variable names
             foreach (ScriptVariable variable in fileInfo.Variables)
             {
-                if (variable.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                if (NameMatcher.Matches(query, variable.Name))
                     result.Add((filePath, variable.Line, $"variable ${variable.Name}"));
             }
         }
