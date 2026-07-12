@@ -317,4 +317,49 @@ public sealed class RoslynLookupTests
 
         results.Should().ContainSingle(r => r.Name == "GetHowTosUseCase");
     }
+
+    private static RoslynWorkspaceIndex BuildIndexWithRoot(string rootDir, params (string source, string projectName, string fileName)[] sources)
+    {
+        IEnumerable<(Compilation, string)> compilations = sources
+            .GroupBy(s => s.projectName)
+            .Select(group =>
+            {
+                IEnumerable<SyntaxTree> trees = group.Select(s =>
+                    CSharpSyntaxTree.ParseText(s.source, path: s.fileName));
+
+                Compilation compilation = CSharpCompilation.Create(
+                    group.Key,
+                    trees,
+                    [MetadataReference.CreateFromFile(typeof(object).Assembly.Location)],
+                    new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+                return (compilation, group.Key);
+            });
+
+        return RoslynWorkspaceIndex.CreateForTesting(compilations, CleanArch, rootDir);
+    }
+
+    [Fact]
+    public void FindTypes_WithRootDir_ReturnsWorkspaceRelativeForwardSlashPaths()
+    {
+        RoslynWorkspaceIndex index = BuildIndexWithRoot(
+            @"C:\repo",
+            ("namespace MyApp.Core; public class Foo { }", "MyApp.Core", @"C:\repo\src\Foo.cs"));
+
+        IReadOnlyList<TypeSummary> results = index.FindTypes(nameContains: "Foo");
+
+        results.Should().ContainSingle().Which.FilePath.Should().Be("src/Foo.cs");
+    }
+
+    [Fact]
+    public void FindTypes_PathOutsideRoot_StaysAbsolute()
+    {
+        RoslynWorkspaceIndex index = BuildIndexWithRoot(
+            @"C:\repo",
+            ("namespace MyApp.Core; public class Foo { }", "MyApp.Core", @"D:\elsewhere\Foo.cs"));
+
+        IReadOnlyList<TypeSummary> results = index.FindTypes(nameContains: "Foo");
+
+        results.Should().ContainSingle().Which.FilePath.Should().Be(@"D:\elsewhere\Foo.cs");
+    }
 }

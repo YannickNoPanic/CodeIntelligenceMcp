@@ -35,6 +35,10 @@ public sealed class ChangeAnalyzer(RoslynWorkspaceIndex index, CleanArchitecture
         HashSet<string> changedFilePaths = [.. workspaceFiles.Select(f =>
             Path.GetFullPath(Path.Combine(repoRoot, f.FilePath)).Replace('\\', '/'))];
 
+        // Violations and diagnostics come back with workspace-relative paths; compare in that form.
+        HashSet<string> changedRelPaths = [.. workspaceFiles.Select(f =>
+            index.Rel(Path.GetFullPath(Path.Combine(repoRoot, f.FilePath))).Replace('\\', '/'))];
+
         List<ChangedFileDetail> fileDetails = BuildFileDetails(workspaceFiles, repoRoot);
 
         HashSet<string> domains = BuildAffectedDomains(workspaceFiles, repoRoot);
@@ -49,7 +53,7 @@ public sealed class ChangeAnalyzer(RoslynWorkspaceIndex index, CleanArchitecture
         {
             foreach (ViolationResult v in await detector.DetectAsync(rule, ct))
             {
-                if (changedFilePaths.Contains(v.FilePath.Replace('\\', '/')))
+                if (changedRelPaths.Contains(v.FilePath.Replace('\\', '/')))
                     scopedViolations.Add(v);
             }
         }
@@ -59,7 +63,7 @@ public sealed class ChangeAnalyzer(RoslynWorkspaceIndex index, CleanArchitecture
         {
             IReadOnlyList<DiagnosticResult> all = await index.GetCompilerDiagnosticsAsync(ct: ct);
             scopedDiagnostics = [.. all.Where(d =>
-                changedFilePaths.Contains(d.FilePath.Replace('\\', '/')))];
+                changedRelPaths.Contains(d.FilePath.Replace('\\', '/')))];
         }
 
         List<TypeSummary> newTypes = [];

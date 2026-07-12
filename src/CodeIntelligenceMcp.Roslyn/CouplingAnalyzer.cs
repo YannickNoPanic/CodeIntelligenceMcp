@@ -25,7 +25,7 @@ public sealed class CouplingAnalyzer(RoslynWorkspaceIndex index)
 
             results.Add(new TypeCoupling(
                 indexed.Symbol.Name,
-                indexed.FilePath,
+                index.Rel(indexed.FilePath),
                 indexed.LineStart,
                 dependsOn.Count,
                 [.. dependsOn.OrderBy(x => x)]));

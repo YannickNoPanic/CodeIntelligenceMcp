@@ -47,7 +47,7 @@ public sealed class ComplexityAnalyzer(RoslynWorkspaceIndex index)
 
         foreach (Document document in index.GetAllDocuments(skipTests: true))
         {
-            string? filePath = document.FilePath;
+            string? filePath = document.FilePath is { } p ? index.Rel(p) : null;
             if (filePath is null)
                 continue;
 

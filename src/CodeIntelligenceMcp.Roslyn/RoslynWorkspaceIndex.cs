@@ -25,6 +25,8 @@ public sealed class RoslynWorkspaceIndex : IDisposable
     private readonly Lazy<HashSet<string>> _testClassNames;
     private readonly Lazy<Task<IReadOnlyList<ProjectMethodComplexity>>> _allComplexity;
 
+    private readonly string? _rootDir;
+
     private RoslynWorkspaceIndex(
         MSBuildWorkspace? workspace,
         Solution? solution,
@@ -32,8 +34,10 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         IReadOnlyList<IndexedType> allTypes,
         IReadOnlyDictionary<string, IndexedType> typeByFqn,
         ILookup<string, IndexedType> typeBySimpleName,
-        IReadOnlyList<string> loadWarnings)
+        IReadOnlyList<string> loadWarnings,
+        string? rootDir)
     {
+        _rootDir = rootDir;
         _workspace = workspace;
         _solution = solution;
         _cleanArch = cleanArch;
@@ -72,6 +76,19 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
     internal IReadOnlyList<IndexedType> AllTypes => _allTypes;
     internal Solution? Solution => _solution;
+
+    // Response paths are workspace-relative with forward slashes: shorter for the client and
+    // stable across machines. Internal storage stays absolute — analyzers read from disk.
+    internal string Rel(string path)
+    {
+        if (string.IsNullOrEmpty(_rootDir) || string.IsNullOrEmpty(path) || !Path.IsPathRooted(path))
+            return path;
+
+        string relative = Path.GetRelativePath(_rootDir, path);
+        return relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative)
+            ? path
+            : relative.Replace('\\', '/');
+    }
     internal HashSet<string> TestClassNames => _testClassNames.Value;
 
     internal Task<IReadOnlyList<ProjectMethodComplexity>> GetAllComplexityAsync(CancellationToken ct = default)
@@ -81,7 +98,8 @@ public sealed class RoslynWorkspaceIndex : IDisposable
     // GetProjectDocuments, GetRazorDocuments, and FindUsagesAsync are not available in this mode.
     internal static RoslynWorkspaceIndex CreateForTesting(
         IEnumerable<(Compilation Compilation, string ProjectName)> compilations,
-        CleanArchitectureNames cleanArch)
+        CleanArchitectureNames cleanArch,
+        string? rootDir = null)
     {
         List<IndexedType> allTypes = [];
 
@@ -109,7 +127,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
             t => t.Symbol.Name,
             StringComparer.OrdinalIgnoreCase);
 
-        return new RoslynWorkspaceIndex(null, null, cleanArch, allTypes, typeByFqn, typeBySimpleName, []);
+        return new RoslynWorkspaceIndex(null, null, cleanArch, allTypes, typeByFqn, typeBySimpleName, [], rootDir);
     }
 
     public static async Task<RoslynWorkspaceIndex> BuildAsync(
@@ -161,7 +179,8 @@ public sealed class RoslynWorkspaceIndex : IDisposable
                 ? AutoDetectCleanArchitecture(solution)
                 : cleanArch;
 
-        return new RoslynWorkspaceIndex(workspace, solution, effectiveCleanArch, allTypes, typeByFqn, typeBySimpleName, loadWarnings ?? []);
+        string? rootDir = solution.FilePath is not null ? Path.GetDirectoryName(solution.FilePath) : null;
+        return new RoslynWorkspaceIndex(workspace, solution, effectiveCleanArch, allTypes, typeByFqn, typeBySimpleName, loadWarnings ?? [], rootDir);
     }
 
     private static CleanArchitectureNames AutoDetectCleanArchitecture(Solution solution)
@@ -265,7 +284,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         return [.. query.Select(t => new TypeSummary(
             t.Symbol.Name,
             t.Symbol.ContainingNamespace?.ToDisplayString() ?? string.Empty,
-            t.FilePath,
+            Rel(t.FilePath),
             t.LineStart,
             GetKind(t.Symbol)))];
     }
@@ -314,7 +333,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         return new Models.MethodInfo(
             indexed.Symbol.Name,
             methodName,
-            filePath,
+            Rel(filePath),
             lineStart,
             lineEnd,
             signature,
@@ -332,7 +351,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
             .Select(t => new ImplementationSummary(
                 t.Symbol.Name,
                 t.Symbol.ContainingNamespace?.ToDisplayString() ?? string.Empty,
-                t.FilePath,
+                Rel(t.FilePath),
                 t.LineStart))];
     }
 
@@ -370,7 +389,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
         foreach (IndexedType t in matching)
         {
-            PublicSurfaceItem item = new(t.Symbol.Name, t.FilePath);
+            PublicSurfaceItem item = new(t.Symbol.Name, Rel(t.FilePath));
 
             if (t.Symbol.TypeKind == TypeKind.Interface)
                 interfaces.Add(item);
@@ -428,7 +447,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
                     GetKind(indexed.Symbol),
                     indexed.Symbol.Name,
                     indexed.Symbol.ContainingNamespace?.ToDisplayString() ?? string.Empty,
-                    indexed.FilePath,
+                    Rel(indexed.FilePath),
                     indexed.LineStart));
             }
 
@@ -468,7 +487,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
                             memberKind,
                             indexed.Symbol.Name,
                             indexed.Symbol.ContainingNamespace?.ToDisplayString() ?? string.Empty,
-                            filePath,
+                            Rel(filePath),
                             lineNumber));
                     }
                 }
@@ -601,12 +620,12 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         {
             IndexedType? test = testsByName[uc.Symbol.Name + "Tests"].FirstOrDefault();
             if (test is not null)
-                covered.Add(new CoveredUseCase(uc.Symbol.Name, test.Symbol.Name, test.FilePath));
+                covered.Add(new CoveredUseCase(uc.Symbol.Name, test.Symbol.Name, Rel(test.FilePath)));
             else
                 uncovered.Add(new UncoveredUseCase(
                     uc.Symbol.Name,
                     uc.Symbol.ContainingNamespace?.ToDisplayString() ?? string.Empty,
-                    uc.FilePath));
+                    Rel(uc.FilePath)));
         }
 
         double pct = useCases.Count == 0 ? 0 : Math.Round(100.0 * covered.Count / useCases.Count, 1);
@@ -630,7 +649,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
     internal IndexedType? FindIndexedType(string typeName) => FindIndexedTypes(typeName).FirstOrDefault();
 
-    private static Models.TypeInfo MapToTypeInfo(IndexedType indexed)
+    private Models.TypeInfo MapToTypeInfo(IndexedType indexed)
     {
         INamedTypeSymbol symbol = indexed.Symbol;
 
@@ -672,7 +691,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
             symbol.Name,
             symbol.ContainingNamespace?.ToDisplayString() ?? string.Empty,
             GetKind(symbol),
-            indexed.FilePath,
+            Rel(indexed.FilePath),
             indexed.LineStart,
             baseType,
             interfaces,
@@ -765,7 +784,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
                     id,
                     severityLabel,
                     diagnostic.GetMessage(),
-                    filePath,
+                    Rel(filePath),
                     lineNumber,
                     project.Name,
                     derivedCategory));
@@ -783,7 +802,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
             .Select(t => new TypeSummary(
                 t.Symbol.Name,
                 t.Symbol.ContainingNamespace?.ToDisplayString() ?? string.Empty,
-                t.FilePath,
+                Rel(t.FilePath),
                 t.LineStart,
                 GetKind(t.Symbol)))];
     }

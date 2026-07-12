@@ -143,7 +143,7 @@ public sealed class RiskAnalyzer(RoslynWorkspaceIndex index)
 
             results.Add(new HotspotResult(
                 indexed.Symbol.Name,
-                indexed.FilePath,
+                index.Rel(indexed.FilePath),
                 indexed.LineStart,
                 score,
                 coupling,

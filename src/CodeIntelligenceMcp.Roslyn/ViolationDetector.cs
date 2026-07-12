@@ -20,7 +20,16 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         "services-in-web", "missing-interface", "direct-instantiation"
     ];
 
-    public async Task<IReadOnlyList<ViolationResult>> DetectAsync(string rule, CancellationToken ct = default) => rule switch
+    public async Task<IReadOnlyList<ViolationResult>> DetectAsync(string rule, CancellationToken ct = default)
+    {
+        IReadOnlyList<ViolationResult> results = await DetectCoreAsync(rule, ct);
+
+        // Rule methods work with absolute paths internally (disk reads, project matching);
+        // only the returned results are workspace-relative.
+        return [.. results.Select(v => v with { FilePath = index.Rel(v.FilePath) })];
+    }
+
+    private async Task<IReadOnlyList<ViolationResult>> DetectCoreAsync(string rule, CancellationToken ct) => rule switch
     {
         "core-no-ef" => await DetectCoreNoEfAsync(ct),
         "core-no-http" => await DetectCoreNoHttpAsync(ct),

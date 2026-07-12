@@ -45,7 +45,7 @@ public sealed class ReferenceQueries(RoslynWorkspaceIndex index)
                 string lineText = await GetLineTextAsync(location.SourceTree, span.StartLinePosition.Line, ct);
 
                 results.Add(new UsageResult(
-                    NormalizeRazorPath(location.SourceTree.FilePath),
+                    index.Rel(NormalizeRazorPath(location.SourceTree.FilePath)),
                     lineNumber,
                     lineText,
                     usageKind));
@@ -113,7 +113,7 @@ public sealed class ReferenceQueries(RoslynWorkspaceIndex index)
                 results.Add(new CallerResult(
                     callerType,
                     callerMethod,
-                    NormalizeRazorPath(location.SourceTree.FilePath),
+                    index.Rel(NormalizeRazorPath(location.SourceTree.FilePath)),
                     lineNumber,
                     lineText));
             }
@@ -189,7 +189,7 @@ public sealed class ReferenceQueries(RoslynWorkspaceIndex index)
                 Location? loc = member.Locations.FirstOrDefault(l => l.IsInSource);
                 int line = loc is not null ? loc.GetLineSpan().StartLinePosition.Line + 1 : indexed.LineStart;
 
-                results.Add(new DeadCodeResult(symbol.Name, member.Name, memberKind, indexed.FilePath, line));
+                results.Add(new DeadCodeResult(symbol.Name, member.Name, memberKind, index.Rel(indexed.FilePath), line));
             }
         }
 
