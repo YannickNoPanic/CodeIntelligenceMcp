@@ -45,6 +45,6 @@ public sealed class DiagnosticsTool(IWorkspaceProvider<RoslynWorkspaceIndex> ros
             filters = new { severity, project, category },
             totalDiagnostics = diagnostics.Count,
             groups
-        });
+        }, index.IsStaleCached());
     }
 }

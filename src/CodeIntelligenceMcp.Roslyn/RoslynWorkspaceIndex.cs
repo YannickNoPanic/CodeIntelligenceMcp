@@ -74,6 +74,26 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         return current is not null && current != Fingerprint;
     }
 
+    private readonly object _staleLock = new();
+    private DateTime _staleCheckedAtUtc;
+    private bool _lastStale;
+
+    // TTL-cached staleness for per-response flags: the fingerprint runs a full git status,
+    // too expensive to pay on every tool call. ChangeAnalysisTool keeps using IsStale()
+    // directly because its auto-refresh needs the precise answer.
+    public bool IsStaleCached()
+    {
+        lock (_staleLock)
+        {
+            if (DateTime.UtcNow - _staleCheckedAtUtc > TimeSpan.FromSeconds(10))
+            {
+                _lastStale = IsStale();
+                _staleCheckedAtUtc = DateTime.UtcNow;
+            }
+            return _lastStale;
+        }
+    }
+
     internal IReadOnlyList<IndexedType> AllTypes => _allTypes;
     internal Solution? Solution => _solution;
 

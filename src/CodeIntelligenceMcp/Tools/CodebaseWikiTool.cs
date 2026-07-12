@@ -25,7 +25,7 @@ public sealed class CodebaseWikiTool(
         WikiGenerator generator = new(index);
         string wiki = await generator.GenerateAsync(focusArea, includePatterns, includeMetrics, includeViolations, ca, ct);
 
-        if (index.IsStale())
+        if (index.IsStaleCached())
         {
             wiki = $"> STALE: files changed since this index was built ({index.IndexedAtUtc:yyyy-MM-dd HH:mm:ss} UTC). "
                 + "Call refresh_workspace for current results.\n\n" + wiki;

@@ -46,7 +46,7 @@ public sealed class CSharpTools(
         if (typeInfo is null)
             return ToolResponses.Err("type not found");
 
-        return ToolResponses.Ok(typeInfo);
+        return ToolResponses.Ok(typeInfo, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "find_types")]
@@ -66,7 +66,7 @@ public sealed class CSharpTools(
             return error!;
 
         IReadOnlyList<TypeSummary> results = index.FindTypes(nameContains, @namespace, implementsInterface, hasAttribute, kind);
-        return ToolResponses.OkList(results, maxResults);
+        return ToolResponses.OkList(results, maxResults, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "get_method")]
@@ -88,7 +88,7 @@ public sealed class CSharpTools(
         if (methodInfo is null)
             return ToolResponses.Err("method not found");
 
-        return ToolResponses.Ok(methodInfo);
+        return ToolResponses.Ok(methodInfo, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "find_implementations")]
@@ -104,7 +104,7 @@ public sealed class CSharpTools(
             return error!;
 
         IReadOnlyList<ImplementationSummary> results = index.FindImplementations(interfaceName);
-        return ToolResponses.OkList(results, maxResults);
+        return ToolResponses.OkList(results, maxResults, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "find_usages")]
@@ -123,7 +123,7 @@ public sealed class CSharpTools(
             return ambiguous;
 
         IReadOnlyList<UsageResult> results = await new ReferenceQueries(index).FindUsagesAsync(symbolName, ct);
-        return ToolResponses.OkList(results, maxResults);
+        return ToolResponses.OkList(results, maxResults, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "get_dependencies")]
@@ -144,7 +144,7 @@ public sealed class CSharpTools(
         if (depInfo is null)
             return ToolResponses.Err("type not found");
 
-        return ToolResponses.Ok(depInfo);
+        return ToolResponses.Ok(depInfo, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "get_public_surface")]
@@ -159,7 +159,7 @@ public sealed class CSharpTools(
             return error!;
 
         PublicSurface surface = index.GetPublicSurface(@namespace);
-        return ToolResponses.Ok(surface);
+        return ToolResponses.Ok(surface, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "get_project_dependencies")]
@@ -173,7 +173,7 @@ public sealed class CSharpTools(
             return error!;
 
         ProjectDependency dep = index.GetProjectDependencies();
-        return ToolResponses.Ok(dep);
+        return ToolResponses.Ok(dep, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "search_symbol")]
@@ -189,7 +189,7 @@ public sealed class CSharpTools(
             return error!;
 
         IReadOnlyList<SymbolSearchResult> results = index.SearchSymbol(query);
-        return ToolResponses.OkList(results, maxResults);
+        return ToolResponses.OkList(results, maxResults, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "scan_patterns")]
@@ -205,7 +205,7 @@ public sealed class CSharpTools(
         CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
         PatternScanner scanner = new(index, ca);
         PatternSummary summary = await scanner.ScanAsync(ct);
-        return ToolResponses.Ok(summary);
+        return ToolResponses.Ok(summary, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "get_test_coverage")]
@@ -218,7 +218,7 @@ public sealed class CSharpTools(
         if (index is null)
             return error!;
 
-        return ToolResponses.Ok(index.GetTestCoverage());
+        return ToolResponses.Ok(index.GetTestCoverage(), index.IsStaleCached());
     }
 
     [McpServerTool(Name = "get_complexity")]
@@ -238,7 +238,7 @@ public sealed class CSharpTools(
 
         ComplexityAnalyzer analyzer = new(index);
         IReadOnlyList<MethodComplexity> results = await analyzer.AnalyzeAsync(minComplexity, projectFilter, minLines, sortBy, ct: ct);
-        return ToolResponses.OkList(results, maxResults);
+        return ToolResponses.OkList(results, maxResults, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "scan_all_violations")]
@@ -283,7 +283,7 @@ public sealed class CSharpTools(
         return ToolResponses.Ok(results
             .OrderByDescending(r => r.Count)
             .Select(r => new { rule = r.Rule, count = r.Count, violations = r.Violations })
-            .ToList());
+            .ToList(), index.IsStaleCached());
     }
 
     [McpServerTool(Name = "find_dead_code")]
@@ -299,7 +299,7 @@ public sealed class CSharpTools(
             return error!;
 
         IReadOnlyList<DeadCodeResult> results = await new ReferenceQueries(index).FindDeadCodeAsync(projectFilter, ct);
-        return ToolResponses.OkList(results, maxResults);
+        return ToolResponses.OkList(results, maxResults, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "find_callers")]
@@ -319,7 +319,7 @@ public sealed class CSharpTools(
             return ambiguous;
 
         IReadOnlyList<CallerResult> results = await new ReferenceQueries(index).FindCallersAsync(typeName, methodName, ct);
-        return ToolResponses.OkList(results, maxResults);
+        return ToolResponses.OkList(results, maxResults, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "get_coupling")]
@@ -336,7 +336,7 @@ public sealed class CSharpTools(
             return error!;
 
         IReadOnlyList<TypeCoupling> results = new CouplingAnalyzer(index).GetCoupling(projectFilter, minCoupling);
-        return ToolResponses.OkList(results, maxResults);
+        return ToolResponses.OkList(results, maxResults, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "get_hotspots")]
@@ -351,7 +351,7 @@ public sealed class CSharpTools(
         if (index is null)
             return error!;
 
-        return ToolResponses.Ok(await new RiskAnalyzer(index).GetHotspotsAsync(topN, projectFilter, ct));
+        return ToolResponses.Ok(await new RiskAnalyzer(index).GetHotspotsAsync(topN, projectFilter, ct), index.IsStaleCached());
     }
 
     [McpServerTool(Name = "find_circular_dependencies")]
@@ -365,7 +365,7 @@ public sealed class CSharpTools(
             return error!;
 
         IReadOnlyList<IReadOnlyList<string>> cycles = index.FindCircularDependencies();
-        return ToolResponses.Ok(new { cycleCount = cycles.Count, cycles });
+        return ToolResponses.Ok(new { cycleCount = cycles.Count, cycles }, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "get_change_risk")]
@@ -386,7 +386,7 @@ public sealed class CSharpTools(
         if (result is null)
             return ToolResponses.Err("type not found");
 
-        return ToolResponses.Ok(result);
+        return ToolResponses.Ok(result, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "find_violations")]
@@ -416,7 +416,7 @@ public sealed class CSharpTools(
                     || (v.TypeName?.Contains(projectFilter, StringComparison.OrdinalIgnoreCase) == true))];
             }
 
-            return ToolResponses.OkList(violations, maxResults);
+            return ToolResponses.OkList(violations, maxResults, index.IsStaleCached());
         }
         catch (ArgumentException ex)
         {
@@ -447,6 +447,6 @@ public sealed class CSharpTools(
 
         CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
         FileAnalysis analysis = FileAnalyzer.Analyze(fullPath, ca);
-        return ToolResponses.Ok(analysis);
+        return ToolResponses.Ok(analysis, index.IsStaleCached());
     }
 }
