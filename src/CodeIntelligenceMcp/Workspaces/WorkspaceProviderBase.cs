@@ -48,12 +48,12 @@ internal abstract class WorkspaceProviderBase<TIndex>(McpConfig config, ILogger 
 
         string cacheKey = ws.Name;
 
-        // The first caller's token drives the shared build; a cancelled or failed build is
-        // evicted so the next call rebuilds. Later callers waiting on an in-flight build can
-        // abandon their wait via WaitAsync without cancelling the build itself.
+        // The shared build runs on CancellationToken.None: one caller's timeout must not kill
+        // the index other agents are awaiting. Callers abandon their wait via WaitAsync(ct);
+        // a failed build is evicted below so the next call rebuilds.
         Lazy<Task<TIndex>> lazy = _loaded.GetOrAdd(
             cacheKey,
-            _ => new Lazy<Task<TIndex>>(() => LoadAsync(ws, ct)));
+            _ => new Lazy<Task<TIndex>>(() => LoadAsync(ws, CancellationToken.None)));
 
         try
         {
