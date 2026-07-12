@@ -51,7 +51,10 @@ public static class GitDiffService
         string? dir = File.Exists(startPath) ? Path.GetDirectoryName(startPath) : startPath;
         while (dir is not null)
         {
-            if (Directory.Exists(Path.Combine(dir, ".git")))
+            // In a git worktree .git is a file ("gitdir: <path>"), not a directory —
+            // the parallel-worktree scenario this server is built for.
+            string gitPath = Path.Combine(dir, ".git");
+            if (Directory.Exists(gitPath) || File.Exists(gitPath))
                 return dir;
             dir = Path.GetDirectoryName(dir);
         }
@@ -62,8 +65,9 @@ public static class GitDiffService
     {
         using Repository repo = new(repoPath);
 
+        Commit headCommit = repo.Head.Tip
+            ?? throw new InvalidOperationException("Repository has no commits yet");
         Commit fromCommit = ResolveFromCommit(repo, baseBranch);
-        Commit headCommit = repo.Head.Tip;
 
         TreeChanges changes = repo.Diff.Compare<TreeChanges>(fromCommit.Tree, headCommit.Tree);
 
@@ -76,6 +80,9 @@ public static class GitDiffService
     public static IReadOnlyList<ChangedFile> GetChangedFilesIncludingWorkingTree(string repoPath, string baseBranch)
     {
         using Repository repo = new(repoPath);
+
+        if (repo.Head.Tip is null)
+            throw new InvalidOperationException("Repository has no commits yet");
 
         Commit fromCommit = ResolveFromCommit(repo, baseBranch);
 
@@ -97,6 +104,9 @@ public static class GitDiffService
     {
         using Repository repo = new(repoPath);
 
+        if (repo.Head.Tip is null)
+            throw new InvalidOperationException("Repository has no commits yet");
+
         Commit fromCommit = ResolveFromCommit(repo, baseBranch);
 
         string gitPath = filePath.Replace('\\', '/');
@@ -109,11 +119,23 @@ public static class GitDiffService
 
     private static Commit ResolveFromCommit(Repository repo, string baseBranch)
     {
+        // Fall back through the common default-branch names so repos that never had 'main'
+        // work without the caller passing baseBranch on every call.
         Branch? branch = repo.Branches[baseBranch]
-            ?? repo.Branches[$"origin/{baseBranch}"];
+            ?? repo.Branches[$"origin/{baseBranch}"]
+            ?? repo.Branches["master"]
+            ?? repo.Branches["origin/master"]
+            ?? repo.Head.TrackedBranch;
 
         if (branch is null)
-            throw new ArgumentException($"Branch '{baseBranch}' not found in repository");
+        {
+            string available = string.Join(", ", repo.Branches
+                .Where(b => !b.IsRemote)
+                .Select(b => b.FriendlyName)
+                .Take(10));
+            throw new ArgumentException(
+                $"Branch '{baseBranch}' not found in repository — available branches: {available}");
+        }
 
         Commit? mergeBase = repo.ObjectDatabase.FindMergeBase(branch.Tip, repo.Head.Tip);
         return mergeBase ?? branch.Tip;
