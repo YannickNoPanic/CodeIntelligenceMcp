@@ -1,6 +1,6 @@
 # Taak 8 — Gedeelde index-build ontkoppelen van eerste caller
 
-**Status:** open. **Plansectie:** "Task 8". **Audit-bevinding:** R7 — het
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 8". **Audit-bevinding:** R7 — het
 CancellationToken van de EERSTE caller stuurt de gedeelde `Lazy<Task>`-build;
 als agent A annuleert (timeout/Esc) crasht de build waar agent B op wacht en
 begint de volgende call van nul.

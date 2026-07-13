@@ -1,6 +1,6 @@
 # Taak 6 — Staleness op alle dotnet-tool-responses
 
-**Status:** open. **Plansectie:** "Task 6" in `docs/superpowers/plans/2026-07-07-audit-fixes.md`.
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 6" in `docs/superpowers/plans/2026-07-07-audit-fixes.md`.
 **Audit-bevinding:** R2 — staleness wordt maar in 2 van ~50 tools gecheckt; `get_method` serveert stil verouderde bodies terwijl de agent code wijzigt.
 
 ## Doel

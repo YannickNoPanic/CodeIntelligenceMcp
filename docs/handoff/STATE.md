@@ -1,7 +1,7 @@
 # STATE — stand van zaken audit-fixes
 
-Laatst bijgewerkt: 2026-07-12. Branch: `feature/audit-fixes` (basis: `main`).
-Testsuite bij handoff: **127/127 groen**.
+Laatst bijgewerkt: 2026-07-13. Branch: `feature/audit-fixes` (basis: `main`).
+Testsuite bij handoff: **133/133 groen**.
 
 ## Afgerond (met commit)
 
@@ -12,13 +12,16 @@ Testsuite bij handoff: **127/127 groen**.
 | 2. WorkspaceAccess | `506a851` | Eén foutgrens: unknown-workspace noemt bekende namen; `WorkspaceLoadException` (hint+detail) voor MSBuild-not-found en solution-load-failures; nooit stack traces naar de client. |
 | 3. list_workspaces | `57d14bf` | Nieuwe tool + `IWorkspaceProvider.IsLoaded`. |
 | 4. Zoekkwaliteit | `8140886` | Glob-wildcards (`*`/`?`) in search_symbol/find_types en alle file-walk finders; compiler-gegenereerde members uit search gefilterd; `maxResults` (default 100) op alle list-tools; `hasCmdletBinding`-typo gefixt. |
-| 5. Relatieve paden | laatste commit op branch | `RoslynWorkspaceIndex.Rel()`: alle response-paden solution-relatief met forward slashes; interne opslag blijft absoluut; ViolationDetector relativiseert centraal; ChangeAnalyzer vergelijkt in relatieve vorm. |
+| 5. Relatieve paden | zie git log | `RoslynWorkspaceIndex.Rel()`: alle response-paden solution-relatief met forward slashes; interne opslag blijft absoluut; ViolationDetector relativiseert centraal; ChangeAnalyzer vergelijkt in relatieve vorm. |
+| 6. Staleness | zie git log | `IsStaleCached()` (10s TTL); alle CSharpTools/DiagnosticsTool-responses dragen een `stale`-vlag; wiki-banner gebruikt de cache; analyze_changes houdt het precieze `IsStale()`. |
+| 7. Git worktrees | zie git log | `.git`-als-file herkend; unborn-HEAD guards; base-branch fallback main → origin/main → master → origin/master → tracked branch; error noemt beschikbare branches. Tests in `GitDiffServiceTests.cs`. |
+| 8. Build-cancellation | zie git log | Gedeelde index-build draait op `CancellationToken.None`; callers verlaten via `WaitAsync(ct)`. |
 
 Controleer met `git log --oneline main..feature/audit-fixes`.
 
 ## Open
 
-Taken 6 t/m 21 — zie de tabel in [README.md](README.md) en de per-taak-files
+Taken 9 t/m 21 — zie de tabel in [README.md](README.md) en de per-taak-files
 in `tasks/`. Taak 17 is al half af: de `hasCmdletBinding`-typo is meegenomen in
 taak 4; alleen NSubstitute-verwijdering en Tomlyn-pin resteren.
 

@@ -1,6 +1,6 @@
 # Taak 7 — Git worktree-support + branch-fallbacks
 
-**Status:** open. **Plansectie:** "Task 7". **Audit-bevinding:** R1 (blocker) —
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 7". **Audit-bevinding:** R1 (blocker) —
 in een git worktree is `.git` een FILE, `ResolveRepoRoot` eist een directory;
 staleness en `analyze_changes` breken precies in het multi-agent-scenario
 waarvoor de tool gepitcht wordt. Plus R11: unborn HEAD geeft NRE, base branch
