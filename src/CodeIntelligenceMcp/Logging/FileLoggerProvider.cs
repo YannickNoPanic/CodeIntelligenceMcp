@@ -1,16 +1,35 @@
+using System.Globalization;
+
 namespace CodeIntelligenceMcp.Logging;
 
 internal sealed class FileLoggerProvider : ILoggerProvider
 {
+    private const long MaxLogSizeBytes = 10 * 1024 * 1024;
+
     private readonly StreamWriter _writer;
     private readonly object _lock = new();
 
     public FileLoggerProvider(string path)
     {
+        RollIfOversized(path);
+
         var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
         _writer = new StreamWriter(stream) { AutoFlush = true };
         lock (_lock)
-            _writer.WriteLine($"--- Session started {DateTime.Now:yyyy-MM-dd HH:mm:ss} ---");
+            _writer.WriteLine($"--- Session started {DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)} ---");
+    }
+
+    private static void RollIfOversized(string path)
+    {
+        try
+        {
+            if (File.Exists(path) && new FileInfo(path).Length > MaxLogSizeBytes)
+                File.Move(path, path + ".old", overwrite: true);
+        }
+        catch (IOException)
+        {
+            // Another live server instance holds the file — keep appending without rotation.
+        }
     }
 
     public ILogger CreateLogger(string categoryName) => new FileLogger(categoryName, _writer, _lock);
@@ -44,11 +63,13 @@ internal sealed class FileLogger(string category, StreamWriter writer, object lo
 
         string message = formatter(state, exception);
 
+        string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
+
         lock (lockObj)
         {
-            writer.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{level}] {shortCategory}: {message}");
+            writer.WriteLine($"{timestamp} [{level}] {shortCategory}: {message}");
             if (exception is not null)
-                writer.WriteLine($"  {exception.GetType().Name}: {exception.Message}");
+                writer.WriteLine($"  {exception}");
         }
     }
 }
