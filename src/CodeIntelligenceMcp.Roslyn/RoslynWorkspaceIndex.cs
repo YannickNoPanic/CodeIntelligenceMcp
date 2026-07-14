@@ -287,7 +287,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         if (implementsInterface is not null)
         {
             query = query.Where(t => t.Symbol.AllInterfaces.Any(i =>
-                i.Name.Equals(implementsInterface, StringComparison.OrdinalIgnoreCase)));
+                InterfaceMatches(i, implementsInterface)));
         }
 
         if (hasAttribute is not null)
@@ -366,13 +366,70 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         return [.. _allTypes
             .Where(t =>
                 t.Symbol.TypeKind != TypeKind.Interface
-                && t.Symbol.AllInterfaces.Any(i =>
-                    i.Name.Equals(interfaceName, StringComparison.OrdinalIgnoreCase)))
+                && t.Symbol.AllInterfaces.Any(i => InterfaceMatches(i, interfaceName)))
             .Select(t => new ImplementationSummary(
                 t.Symbol.Name,
                 t.Symbol.ContainingNamespace?.ToDisplayString() ?? string.Empty,
                 Rel(t.FilePath),
                 t.LineStart))];
+    }
+
+    // Walks BaseType chains, so descendants at any depth are found. Matches on simple name
+    // or fully qualified name of any ancestor class.
+    public IReadOnlyList<ImplementationSummary> FindDerivedTypes(string baseTypeName)
+    {
+        List<ImplementationSummary> results = [];
+
+        foreach (IndexedType t in _allTypes)
+        {
+            for (INamedTypeSymbol? b = t.Symbol.BaseType; b is not null; b = b.BaseType)
+            {
+                if (b.Name.Equals(baseTypeName, StringComparison.OrdinalIgnoreCase)
+                    || b.ToDisplayString().Equals(baseTypeName, StringComparison.OrdinalIgnoreCase))
+                {
+                    results.Add(new ImplementationSummary(
+                        t.Symbol.Name,
+                        t.Symbol.ContainingNamespace?.ToDisplayString() ?? string.Empty,
+                        Rel(t.FilePath),
+                        t.LineStart));
+                    break;
+                }
+            }
+        }
+
+        return results;
+    }
+
+    // "IUseCase" matches every construction; "IUseCase<ReqA, int>" matches only interfaces
+    // with that generic name, arity, and type-argument simple names.
+    private static bool InterfaceMatches(INamedTypeSymbol candidate, string query)
+    {
+        int lt = query.IndexOf('<');
+        if (lt < 0)
+            return candidate.Name.Equals(query, StringComparison.OrdinalIgnoreCase);
+
+        if (!query.EndsWith('>'))
+            return false;
+
+        string name = query[..lt].Trim();
+        string[] args = query[(lt + 1)..^1].Split(',');
+
+        if (!candidate.Name.Equals(name, StringComparison.OrdinalIgnoreCase)
+            || candidate.TypeArguments.Length != args.Length)
+            return false;
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            string arg = args[i].Trim();
+            ITypeSymbol typeArg = candidate.TypeArguments[i];
+
+            // ToDisplayString covers keyword forms ("int" for Int32) and qualified names.
+            if (!typeArg.Name.Equals(arg, StringComparison.OrdinalIgnoreCase)
+                && !typeArg.ToDisplayString().Equals(arg, StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+
+        return true;
     }
 
     public DependencyInfo? GetDependencies(string typeName)

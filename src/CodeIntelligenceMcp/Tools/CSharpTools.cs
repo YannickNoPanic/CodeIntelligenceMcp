@@ -55,7 +55,7 @@ public sealed class CSharpTools(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
         [Description("Type name filter: substring, or glob with * and ? (case-insensitive)")] string? nameContains = null,
         [Description("Exact or prefix namespace match")] string? @namespace = null,
-        [Description("Interface name the type must implement")] string? implementsInterface = null,
+        [Description("Interface the type must implement: simple name, or with type args like 'IUseCase<CreateRequest, Result>'")] string? implementsInterface = null,
         [Description("Attribute name the type must have")] string? hasAttribute = null,
         [Description("Type kind: class, interface, record, or enum")] string? kind = null,
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
@@ -95,7 +95,7 @@ public sealed class CSharpTools(
     [Description("Find all concrete types that implement a given interface. Use to map interfaces to their implementations.")]
     public async Task<string> FindImplementations(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
-        [Description("Interface name")] string interfaceName,
+        [Description("Interface name: simple, or with type args like 'IUseCase<CreateRequest, Result>'")] string interfaceName,
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
@@ -104,6 +104,22 @@ public sealed class CSharpTools(
             return error!;
 
         IReadOnlyList<ImplementationSummary> results = index.FindImplementations(interfaceName);
+        return ToolResponses.OkList(results, maxResults, index.IsStaleCached());
+    }
+
+    [McpServerTool(Name = "find_derived_types")]
+    [Description("Find all types that derive from a given base class, at any depth. Complements find_implementations (which covers interfaces).")]
+    public async Task<string> FindDerivedTypes(
+        [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx for ad-hoc worktrees")] string workspace,
+        [Description("Base class name (simple or fully qualified)")] string baseTypeName,
+        [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
+        CancellationToken ct = default)
+    {
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        if (index is null)
+            return error!;
+
+        IReadOnlyList<ImplementationSummary> results = index.FindDerivedTypes(baseTypeName);
         return ToolResponses.OkList(results, maxResults, index.IsStaleCached());
     }
 

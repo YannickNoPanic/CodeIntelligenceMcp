@@ -362,4 +362,58 @@ public sealed class RoslynLookupTests
 
         results.Should().ContainSingle().Which.FilePath.Should().Be(@"D:\elsewhere\Foo.cs");
     }
+    [Fact]
+    public void FindDerivedTypes_AbstractBase_ReturnsAllDescendants()
+    {
+        RoslynWorkspaceIndex index = BuildIndex((
+            "namespace MyApp.Core; public abstract class BaseHandler { } public class EmailHandler : BaseHandler { } public class SmsHandler : EmailHandler { } public class Unrelated { }",
+            "MyApp.Core",
+            "Handlers.cs"));
+
+        IReadOnlyList<ImplementationSummary> results = index.FindDerivedTypes("BaseHandler");
+
+        results.Select(r => r.TypeName).Should().BeEquivalentTo(["EmailHandler", "SmsHandler"]);
+    }
+
+    [Fact]
+    public void FindTypes_GenericInterfaceWithArgs_MatchesExactConstruction()
+    {
+        RoslynWorkspaceIndex index = BuildIndex((
+            "namespace MyApp.Core; public interface IUseCase<TIn, TOut> { } public record ReqA; public record ReqB; " +
+            "public class UseCaseA : IUseCase<ReqA, int> { } public class UseCaseB : IUseCase<ReqB, int> { }",
+            "MyApp.Core",
+            "UseCases.cs"));
+
+        IReadOnlyList<TypeSummary> results = index.FindTypes(implementsInterface: "IUseCase<ReqA, int>");
+
+        results.Select(r => r.Name).Should().BeEquivalentTo(["UseCaseA"]);
+    }
+
+    [Fact]
+    public void FindImplementations_GenericInterfaceWithArgs_MatchesExactConstruction()
+    {
+        RoslynWorkspaceIndex index = BuildIndex((
+            "namespace MyApp.Core; public interface IUseCase<TIn, TOut> { } public record ReqA; public record ReqB; " +
+            "public class UseCaseA : IUseCase<ReqA, int> { } public class UseCaseB : IUseCase<ReqB, int> { }",
+            "MyApp.Core",
+            "UseCases.cs"));
+
+        IReadOnlyList<ImplementationSummary> results = index.FindImplementations("IUseCase<ReqB, int>");
+
+        results.Select(r => r.TypeName).Should().BeEquivalentTo(["UseCaseB"]);
+    }
+
+    [Fact]
+    public void FindImplementations_SimpleNameOnGeneric_StillMatchesAllConstructions()
+    {
+        RoslynWorkspaceIndex index = BuildIndex((
+            "namespace MyApp.Core; public interface IUseCase<TIn, TOut> { } public record ReqA; " +
+            "public class UseCaseA : IUseCase<ReqA, int> { }",
+            "MyApp.Core",
+            "UseCases.cs"));
+
+        IReadOnlyList<ImplementationSummary> results = index.FindImplementations("IUseCase");
+
+        results.Select(r => r.TypeName).Should().BeEquivalentTo(["UseCaseA"]);
+    }
 }
