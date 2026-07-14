@@ -1,6 +1,6 @@
 # Taak 13 — Multi-TFM projectdeduplicatie
 
-**Status:** open. **Plansectie:** "Task 13". **Audit-bevinding:** C5 —
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 13". **Audit-bevinding:** C5 —
 MSBuildWorkspace levert bij multi-targeting één `Project` per TFM
 (`Naam(net8.0)` etc.); elk type wordt dubbel geïndexeerd, `typeByFqn.TryAdd`
 houdt stil de eerste, projectfilters matchen alle TFM-varianten.

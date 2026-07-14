@@ -1,6 +1,6 @@
 # Taak 15 — Partial classes: handgeschreven declaratie-locatie
 
-**Status:** open. **Plansectie:** "Task 15". **Audit-bevinding:** C7 — een
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 15". **Audit-bevinding:** C7 — een
 partial type wordt geïndexeerd op de EERSTE source-locatie; file/line kan naar
 een gegenereerde helft wijzen (bijv. `obj/*.g.cs`).
 

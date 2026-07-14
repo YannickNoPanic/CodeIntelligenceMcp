@@ -1,6 +1,6 @@
 # Taak 14 — .slnf solution-filter-support
 
-**Status:** open. **Plansectie:** "Task 14". **Audit-bevinding:** C6 — `.slnf`
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 14". **Audit-bevinding:** C6 — `.slnf`
 wordt niet ondersteund en niet gevalideerd; het pad gaat ongecheckt naar
 `OpenSolutionAsync`. Juist grote solutions (de doelgroep) gebruiken filters.
 

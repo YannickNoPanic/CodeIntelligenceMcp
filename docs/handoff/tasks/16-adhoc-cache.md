@@ -1,6 +1,6 @@
 # Taak 16 — Ad-hoc pad hergebruikt cache van geconfigureerde workspace
 
-**Status:** open. **Plansectie:** "Task 16". **Audit-bevinding:** R10 —
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 16". **Audit-bevinding:** R10 —
 dezelfde solution via naam ("datalake2") én via absoluut pad geeft twee
 volledige onafhankelijke indexes (cache key = ws.Name): dubbel geheugen,
 dubbele cold start.

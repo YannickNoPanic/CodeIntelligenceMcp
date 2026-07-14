@@ -1,6 +1,6 @@
 # Taak 12 — Transitieve find_callers + alle overloads
 
-**Status:** open. **Plansectie:** "Task 12". **Audit-bevinding:** C1 —
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 12". **Audit-bevinding:** C1 —
 `find_callers` doet één SymbolFinder-pass (alleen directe callers) en pakt
 alleen de EERSTE ordinary overload (`ReferenceQueries.cs` regel ~70-72).
 

@@ -1,6 +1,6 @@
 # Taak 11 — find_derived_types + generic-aware interface-matching
 
-**Status:** open. **Plansectie:** "Task 11". **Audit-bevindingen:** C3
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 11". **Audit-bevindingen:** C3
 (geen derived-types-query; subclass-hiërarchieën onzichtbaar) en C4
 (`implementsInterface` matcht op simple name; `IUseCase<TIn>` vs
 `IUseCase<TIn,TOut>` niet te onderscheiden, query mét type-args faalt).

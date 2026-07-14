@@ -1,6 +1,6 @@
 # Taak 17 — Kleine fixes (restant)
 
-**Status:** half af. **Plansectie:** "Task 17".
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 17".
 
 ## Al gedaan (in taak 4, commit 8140886)
 

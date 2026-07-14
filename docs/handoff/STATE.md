@@ -18,14 +18,20 @@ Testsuite bij handoff: **133/133 groen**.
 | 8. Build-cancellation | zie git log | Gedeelde index-build draait op `CancellationToken.None`; callers verlaten via `WaitAsync(ct)`. |
 | 9. Log-rotatie | zie git log | Rol naar `.old` boven 10MB (IOException-tolerant voor tweede instantie); exceptions loggen volledige `ToString()`; timestamps InvariantCulture met ms. |
 | 10. Config discovery | zie git log | `--config`-arg → `CODEINTEL_CONFIG`-env → naast binary; missing config = warning + lege lijst (niet fataal); invalid JSON = duidelijke fout met pad; csproj-Content conditioneel — clean clone bouwt. |
+| 11. Derived types | zie git log | `find_derived_types`-tool (BaseType-ketens, elke diepte); `implementsInterface`/`find_implementations` accepteren type-args (`IUseCase<ReqA, int>`, incl. keyword-vormen zoals `int`). |
+| 12. Transitieve callers | zie git log | `find_callers` heeft `depth` (1..3, BFS, frontier-cap 200/level), zoekt alle ordinary overloads, results dragen `depth`. E2E-dekking hoort in taak 18. |
+| 13. Multi-TFM | zie git log | Dedup per csproj in BuildAsync; `NormalizeProjectName` stript TFM-suffixen in index, dependency-graph en cycle-detectie. |
+| 14. .slnf | zie git log | `SolutionFilterFile.Parse` + allowlist in BuildAsync; onbekende extensies falen met actionable error; descriptions noemen .slnf. |
+| 15. Partial classes | zie git log | `PickPrimaryLocation` prefereert niet-gegenereerde declaratie (geen obj/, .g.cs, .generated.cs). |
+| 16. Ad-hoc cache | zie git log | Absoluut pad naar geconfigureerde workspace hergebruikt diens config en cache key. |
+| 17. Kleine fixes | zie git log | NSubstitute verwijderd, Tomlyn gepind op 0.17.0 (typo was al in taak 4 gedaan). |
 
 Controleer met `git log --oneline main..feature/audit-fixes`.
 
 ## Open
 
-Taken 11 t/m 21 — zie de tabel in [README.md](README.md) en de per-taak-files
-in `tasks/`. Taak 17 is al half af: de `hasCmdletBinding`-typo is meegenomen in
-taak 4; alleen NSubstitute-verwijdering en Tomlyn-pin resteren.
+Taken 18 t/m 21 — zie de tabel in [README.md](README.md) en de per-taak-files
+in `tasks/`.
 
 ## Belangrijke afwijkingen t.o.v. het originele plan
 
