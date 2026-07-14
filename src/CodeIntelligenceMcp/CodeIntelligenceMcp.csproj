@@ -24,7 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\..\mcp-config.json" Link="mcp-config.json">
+    <Content Include="..\..\mcp-config.json" Link="mcp-config.json" Condition="Exists('..\..\mcp-config.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

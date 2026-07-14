@@ -8,15 +8,31 @@ internal static class McpConfigLoader
     };
 
     // A broken individual workspace must not take down the server for the healthy ones:
-    // invalid entries are logged and dropped, only a missing/unreadable config file is fatal.
+    // invalid entries are logged and dropped. A missing config file is not fatal either —
+    // ad-hoc absolute paths work on every tool without configuration. Only malformed JSON
+    // is fatal: silently ignoring a config the user wrote would hide their mistake.
     internal static McpConfig Load(string configPath, ILogger? logger = null)
     {
         if (!File.Exists(configPath))
-            throw new FileNotFoundException($"MCP config not found: {configPath}");
+        {
+            logger?.LogWarning(
+                "MCP config not found at '{ConfigPath}' — starting with no configured workspaces; absolute paths still work ad hoc",
+                configPath);
+            return new McpConfig();
+        }
 
         string json = File.ReadAllText(configPath);
-        McpConfig config = JsonSerializer.Deserialize<McpConfig>(json, JsonOptions)
-            ?? throw new InvalidOperationException($"Failed to deserialize config: {configPath}");
+
+        McpConfig config;
+        try
+        {
+            config = JsonSerializer.Deserialize<McpConfig>(json, JsonOptions)
+                ?? throw new InvalidOperationException($"mcp-config.json is invalid JSON: deserialized to null (path: {configPath})");
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"mcp-config.json is invalid JSON: {ex.Message} (path: {configPath})");
+        }
 
         List<WorkspaceConfig> valid = [];
         foreach (WorkspaceConfig workspace in config.Workspaces)

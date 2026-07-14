@@ -24,7 +24,20 @@ startupLogger.LogInformation("Mode={Mode}", useSse ? "SSE" : "stdio");
 
 try
 {
-    string configPath = Path.Combine(AppContext.BaseDirectory, "mcp-config.json");
+    // Config discovery: --config CLI arg, then CODEINTEL_CONFIG env var, then next to the binary.
+    // Kept separate from the host configuration system (Mcp:Port) on purpose.
+    static string ResolveConfigPath(string[] args)
+    {
+        int i = Array.IndexOf(args, "--config");
+        if (i >= 0 && i + 1 < args.Length)
+            return Path.GetFullPath(args[i + 1]);
+
+        return Environment.GetEnvironmentVariable("CODEINTEL_CONFIG") is { Length: > 0 } env
+            ? Path.GetFullPath(env)
+            : Path.Combine(AppContext.BaseDirectory, "mcp-config.json");
+    }
+
+    string configPath = ResolveConfigPath(args);
     startupLogger.LogInformation("Loading config from '{ConfigPath}'", configPath);
     McpConfig config = McpConfigLoader.Load(configPath, startupLogger);
 
