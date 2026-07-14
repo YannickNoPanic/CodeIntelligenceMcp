@@ -59,7 +59,19 @@ public sealed class ReferenceQueries(RoslynWorkspaceIndex index)
         string typeName,
         string methodName,
         CancellationToken ct = default)
+        => await FindCallersAsync(typeName, methodName, 1, ct);
+
+    // BFS over caller levels: depth 1 = direct callers of every ordinary overload; each
+    // further level runs SymbolFinder on the enclosing methods found one level down.
+    // The frontier is capped per level to bound cost on hub methods.
+    public async Task<IReadOnlyList<CallerResult>> FindCallersAsync(
+        string typeName,
+        string methodName,
+        int depth,
+        CancellationToken ct = default)
     {
+        const int maxFrontierPerLevel = 200;
+
         if (index.Solution is null)
             return [];
 
@@ -67,59 +79,100 @@ public sealed class ReferenceQueries(RoslynWorkspaceIndex index)
         if (indexed is null)
             return [];
 
-        IMethodSymbol? method = indexed.Symbol.GetMembers(methodName)
+        List<IMethodSymbol> frontier = [.. indexed.Symbol.GetMembers(methodName)
             .OfType<IMethodSymbol>()
-            .FirstOrDefault(m => m.MethodKind == MethodKind.Ordinary);
-        if (method is null)
+            .Where(m => m.MethodKind == MethodKind.Ordinary)];
+        if (frontier.Count == 0)
             return [];
 
-        IEnumerable<ReferencedSymbol> refs = await SymbolFinder.FindReferencesAsync(method, index.Solution, ct);
-
         List<CallerResult> results = [];
+        HashSet<(string Type, string Method, string File, int Line)> seen = [];
 
-        foreach (ReferencedSymbol referencedSymbol in refs)
+        for (int level = 1; level <= depth && frontier.Count > 0; level++)
         {
-            foreach (ReferenceLocation refLocation in referencedSymbol.Locations)
+            List<IMethodSymbol> nextFrontier = [];
+
+            foreach (IMethodSymbol method in frontier)
             {
-                Location location = refLocation.Location;
-                if (!location.IsInSource || location.SourceTree is null)
-                    continue;
+                IEnumerable<ReferencedSymbol> refs = await SymbolFinder.FindReferencesAsync(method, index.Solution, ct);
 
-                SyntaxNode root = await location.SourceTree.GetRootAsync(ct);
-                SyntaxNode? node = root.FindNode(location.SourceSpan);
-
-                string callerType = "<unknown>";
-                string callerMethod = "<unknown>";
-                SyntaxNode? current = node;
-                while (current is not null)
+                foreach (ReferencedSymbol referencedSymbol in refs)
                 {
-                    if (current is MethodDeclarationSyntax md && callerMethod == "<unknown>")
-                        callerMethod = md.Identifier.Text;
-                    else if (current is ConstructorDeclarationSyntax && callerMethod == "<unknown>")
-                        callerMethod = ".ctor";
-
-                    if (current is TypeDeclarationSyntax td)
+                    foreach (ReferenceLocation refLocation in referencedSymbol.Locations)
                     {
-                        callerType = td.Identifier.Text;
-                        break;
+                        Location location = refLocation.Location;
+                        if (!location.IsInSource || location.SourceTree is null)
+                            continue;
+
+                        SyntaxNode root = await location.SourceTree.GetRootAsync(ct);
+                        SyntaxNode? node = root.FindNode(location.SourceSpan);
+
+                        (string callerType, string callerMethod, SyntaxNode? enclosingDecl) = FindEnclosingMember(node);
+
+                        FileLinePositionSpan span = location.GetLineSpan();
+                        int lineNumber = span.StartLinePosition.Line + 1;
+
+                        if (!seen.Add((callerType, callerMethod, location.SourceTree.FilePath, lineNumber)))
+                            continue;
+
+                        string lineText = await GetLineTextAsync(location.SourceTree, span.StartLinePosition.Line, ct);
+
+                        results.Add(new CallerResult(
+                            callerType,
+                            callerMethod,
+                            index.Rel(NormalizeRazorPath(location.SourceTree.FilePath)),
+                            lineNumber,
+                            lineText,
+                            level));
+
+                        if (level < depth
+                            && nextFrontier.Count < maxFrontierPerLevel
+                            && enclosingDecl is not null
+                            && index.Solution.GetDocument(location.SourceTree) is { } doc
+                            && await doc.GetSemanticModelAsync(ct) is { } semanticModel
+                            && semanticModel.GetDeclaredSymbol(enclosingDecl, ct) is IMethodSymbol callerSymbol)
+                        {
+                            nextFrontier.Add(callerSymbol);
+                        }
                     }
-                    current = current.Parent;
                 }
-
-                FileLinePositionSpan span = location.GetLineSpan();
-                int lineNumber = span.StartLinePosition.Line + 1;
-                string lineText = await GetLineTextAsync(location.SourceTree, span.StartLinePosition.Line, ct);
-
-                results.Add(new CallerResult(
-                    callerType,
-                    callerMethod,
-                    index.Rel(NormalizeRazorPath(location.SourceTree.FilePath)),
-                    lineNumber,
-                    lineText));
             }
+
+            frontier = nextFrontier;
         }
 
         return results;
+    }
+
+    private static (string Type, string Method, SyntaxNode? Declaration) FindEnclosingMember(SyntaxNode? node)
+    {
+        string callerType = "<unknown>";
+        string callerMethod = "<unknown>";
+        SyntaxNode? declaration = null;
+
+        SyntaxNode? current = node;
+        while (current is not null)
+        {
+            if (current is MethodDeclarationSyntax md && callerMethod == "<unknown>")
+            {
+                callerMethod = md.Identifier.Text;
+                declaration = md;
+            }
+            else if (current is ConstructorDeclarationSyntax cd && callerMethod == "<unknown>")
+            {
+                callerMethod = ".ctor";
+                declaration = cd;
+            }
+
+            if (current is TypeDeclarationSyntax td)
+            {
+                callerType = td.Identifier.Text;
+                break;
+            }
+            current = current.Parent;
+        }
+
+        return (callerType, callerMethod, declaration);
     }
 
     public async Task<IReadOnlyList<DeadCodeResult>> FindDeadCodeAsync(

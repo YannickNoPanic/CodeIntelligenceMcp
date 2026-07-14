@@ -5,4 +5,5 @@ public record CallerResult(
     string CallerMethod,
     string FilePath,
     int LineNumber,
-    string LineText);
+    string LineText,
+    int Depth);

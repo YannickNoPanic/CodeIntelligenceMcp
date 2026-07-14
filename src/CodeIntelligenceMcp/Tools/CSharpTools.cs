@@ -319,12 +319,13 @@ public sealed class CSharpTools(
     }
 
     [McpServerTool(Name = "find_callers")]
-    [Description("Find all callers of a specific method. Use before refactoring to understand impact — returns caller type, method name, file, line, and the calling line text.")]
+    [Description("Find callers of a specific method, optionally transitive (callers-of-callers up to depth 3). Use before refactoring to understand impact — returns caller type, method name, file, line, calling line text, and depth.")]
     public async Task<string> FindCallers(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx/.slnf for ad-hoc worktrees")] string workspace,
         [Description("Type name that owns the method")] string typeName,
         [Description("Method name to find callers of")] string methodName,
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
+        [Description("Transitive depth: 1 = direct callers only (default), up to 3 = callers-of-callers")] int depth = 1,
         CancellationToken ct = default)
     {
         (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
@@ -334,7 +335,8 @@ public sealed class CSharpTools(
         if (AmbiguityError(index, typeName) is string ambiguous)
             return ambiguous;
 
-        IReadOnlyList<CallerResult> results = await new ReferenceQueries(index).FindCallersAsync(typeName, methodName, ct);
+        IReadOnlyList<CallerResult> results = await new ReferenceQueries(index)
+            .FindCallersAsync(typeName, methodName, Math.Clamp(depth, 1, 3), ct);
         return ToolResponses.OkList(results, maxResults, index.IsStaleCached());
     }
 
