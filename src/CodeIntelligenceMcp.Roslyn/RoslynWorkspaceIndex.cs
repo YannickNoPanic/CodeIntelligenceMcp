@@ -159,11 +159,21 @@ public sealed class RoslynWorkspaceIndex : IDisposable
     {
         List<IndexedType> allTypes = [];
 
+        // Multi-targeted solutions surface one Project per TFM ("X(net8.0)", "X(net9.0)")
+        // over the same csproj — index only the first to avoid duplicate types and
+        // TFM-suffixed project names in filters and responses.
+        HashSet<string> seenProjectFiles = new(StringComparer.OrdinalIgnoreCase);
+
         foreach (Project project in solution.Projects)
         {
+            if (!seenProjectFiles.Add(project.FilePath ?? project.Name))
+                continue;
+
             Compilation? compilation = await project.GetCompilationAsync(cancellationToken);
             if (compilation is null)
                 continue;
+
+            string projectName = NormalizeProjectName(project.Name);
 
             foreach (INamedTypeSymbol type in GetAllTypes(compilation.Assembly.GlobalNamespace))
             {
@@ -179,7 +189,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
                 int lineStart = location.GetLineSpan().StartLinePosition.Line + 1;
 
-                allTypes.Add(new IndexedType(type, compilation, project.Name, filePath, lineStart));
+                allTypes.Add(new IndexedType(type, compilation, projectName, filePath, lineStart));
             }
         }
 
@@ -201,6 +211,20 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
         string? rootDir = solution.FilePath is not null ? Path.GetDirectoryName(solution.FilePath) : null;
         return new RoslynWorkspaceIndex(workspace, solution, effectiveCleanArch, allTypes, typeByFqn, typeBySimpleName, loadWarnings ?? [], rootDir);
+    }
+
+    // "X.Core(net8.0)" -> "X.Core"; only strips suffixes that look like a TFM so
+    // project names that legitimately contain parentheses survive.
+    internal static string NormalizeProjectName(string name)
+    {
+        int open = name.LastIndexOf('(');
+        if (open <= 0 || !name.EndsWith(')'))
+            return name;
+
+        string suffix = name[(open + 1)..^1];
+        return suffix.StartsWith("net", StringComparison.OrdinalIgnoreCase)
+            ? name[..open]
+            : name;
     }
 
     private static CleanArchitectureNames AutoDetectCleanArchitecture(Solution solution)
@@ -486,16 +510,22 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         if (_solution is null)
             return new ProjectDependency([], []);
 
-        List<Models.ProjectInfo> projects = [.. _solution.Projects.Select(p => new Models.ProjectInfo(p.Name, p.FilePath ?? string.Empty))];
+        List<Models.ProjectInfo> projects = [.. _solution.Projects
+            .Select(p => new Models.ProjectInfo(NormalizeProjectName(p.Name), p.FilePath ?? string.Empty))
+            .DistinctBy(p => p.Name)];
 
+        HashSet<(string From, string To)> seenEdges = [];
         List<DependencyEdge> edges = [];
         foreach (Project project in _solution.Projects)
         {
             foreach (ProjectReference reference in project.ProjectReferences)
             {
                 Project? referenced = _solution.GetProject(reference.ProjectId);
-                if (referenced is not null)
-                    edges.Add(new DependencyEdge(project.Name, referenced.Name));
+                if (referenced is not null
+                    && seenEdges.Add((NormalizeProjectName(project.Name), NormalizeProjectName(referenced.Name))))
+                {
+                    edges.Add(new DependencyEdge(NormalizeProjectName(project.Name), NormalizeProjectName(referenced.Name)));
+                }
             }
         }
 
@@ -892,12 +922,12 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         ProjectDependencyGraph graph = _solution.GetProjectDependencyGraph();
 
         Dictionary<ProjectId, string> nameById = _solution.Projects
-            .ToDictionary(p => p.Id, p => p.Name);
+            .ToDictionary(p => p.Id, p => NormalizeProjectName(p.Name));
 
         Dictionary<string, HashSet<string>> adjacency = [];
         foreach (Project project in _solution.Projects)
         {
-            string name = project.Name;
+            string name = NormalizeProjectName(project.Name);
             if (!adjacency.ContainsKey(name))
                 adjacency[name] = [];
 

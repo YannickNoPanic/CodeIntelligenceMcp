@@ -416,4 +416,14 @@ public sealed class RoslynLookupTests
 
         results.Select(r => r.TypeName).Should().BeEquivalentTo(["UseCaseA"]);
     }
+    [Theory]
+    [InlineData("Datalake2.Core(net8.0)", "Datalake2.Core")]
+    [InlineData("App(netstandard2.0)", "App")]
+    [InlineData("App(netcoreapp3.1)", "App")]
+    [InlineData("Datalake2.Core", "Datalake2.Core")]
+    [InlineData("Foo(bar)", "Foo(bar)")]
+    public void NormalizeProjectName_StripsOnlyTfmSuffix(string input, string expected)
+    {
+        RoslynWorkspaceIndex.NormalizeProjectName(input).Should().Be(expected);
+    }
 }
