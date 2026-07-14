@@ -105,6 +105,41 @@ public sealed class RoslynIntegrationTests(MsBuildFixture fixture)
     }
 
     [Fact]
+    public async Task AnalyzeAsync_ComplexMethod_ScoresFiveAndSimpleScoresOne()
+    {
+        var analyzer = new ComplexityAnalyzer(fixture.Index);
+
+        IReadOnlyList<MethodComplexity> all = await analyzer.AnalyzeAsync(minComplexity: 1, ct: CancellationToken.None);
+
+        all.Should().Contain(m => m.MethodName == "Score" && m.Complexity == 5);
+        all.Should().Contain(m => m.MethodName == "Simple" && m.Complexity == 1);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_MinComplexityThreshold_FiltersSimpleMethods()
+    {
+        var analyzer = new ComplexityAnalyzer(fixture.Index);
+
+        IReadOnlyList<MethodComplexity> filtered = await analyzer.AnalyzeAsync(minComplexity: 4, ct: CancellationToken.None);
+
+        filtered.Should().Contain(m => m.MethodName == "Score");
+        filtered.Should().NotContain(m => m.MethodName == "Simple");
+    }
+
+    [Fact]
+    public async Task GetChangeRiskAsync_UntestedReferencedType_ReturnsScoreAndReferences()
+    {
+        var analyzer = new RiskAnalyzer(fixture.Index);
+
+        ChangeRiskResult? risk = await analyzer.GetChangeRiskAsync("GreetUseCase", CancellationToken.None);
+
+        risk.Should().NotBeNull();
+        risk!.HasTests.Should().BeFalse();
+        risk.ReferencedBy.Should().Contain("Caller");
+        risk.RiskScore.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void IsStaleCached_NonGitFixture_IsAlwaysFalse()
     {
         fixture.Index.IsStaleCached().Should().BeFalse();
