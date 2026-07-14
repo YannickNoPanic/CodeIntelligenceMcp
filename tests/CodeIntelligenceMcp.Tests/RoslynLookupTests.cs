@@ -426,4 +426,17 @@ public sealed class RoslynLookupTests
     {
         RoslynWorkspaceIndex.NormalizeProjectName(input).Should().Be(expected);
     }
+    [Fact]
+    public void GetType_PartialClass_PrefersHandWrittenDeclarationLocation()
+    {
+        RoslynWorkspaceIndex index = BuildIndexWithRoot(
+            @"C:\repo",
+            (@"namespace MyApp.Core; public partial class Split { public int A { get; set; } }", "MyApp.Core", @"C:\repo\obj\Split.g.cs"),
+            (@"namespace MyApp.Core; public partial class Split { public int B { get; set; } }", "MyApp.Core", @"C:\repo\src\Split.cs"));
+
+        RoslynTypeInfo? result = index.GetType("Split");
+
+        result.Should().NotBeNull();
+        result!.FilePath.Should().Be("src/Split.cs");
+    }
 }

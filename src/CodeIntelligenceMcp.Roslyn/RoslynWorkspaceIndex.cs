@@ -127,7 +127,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         {
             foreach (INamedTypeSymbol type in GetAllTypes(compilation.GlobalNamespace))
             {
-                Location? location = type.Locations.FirstOrDefault(l => l.IsInSource);
+                Location? location = PickPrimaryLocation(type);
 
                 if (location is null)
                     continue;
@@ -177,7 +177,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
             foreach (INamedTypeSymbol type in GetAllTypes(compilation.Assembly.GlobalNamespace))
             {
-                Location? location = type.Locations.FirstOrDefault(l => l.IsInSource);
+                Location? location = PickPrimaryLocation(type);
 
                 if (location is null)
                     continue;
@@ -211,6 +211,32 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
         string? rootDir = solution.FilePath is not null ? Path.GetDirectoryName(solution.FilePath) : null;
         return new RoslynWorkspaceIndex(workspace, solution, effectiveCleanArch, allTypes, typeByFqn, typeBySimpleName, loadWarnings ?? [], rootDir);
+    }
+
+    // Partial types have one location per declaration; prefer a hand-written one over
+    // generated halves (obj/, .g.cs) so file/line in responses points at editable code.
+    internal static Location? PickPrimaryLocation(INamedTypeSymbol type)
+    {
+        Location? first = null;
+
+        foreach (Location location in type.Locations)
+        {
+            if (!location.IsInSource)
+                continue;
+
+            first ??= location;
+
+            string path = location.SourceTree?.FilePath ?? string.Empty;
+            bool generated = path.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase)
+                || path.Contains("/obj/", StringComparison.OrdinalIgnoreCase)
+                || path.Contains("\\obj\\", StringComparison.OrdinalIgnoreCase);
+
+            if (!generated)
+                return location;
+        }
+
+        return first;
     }
 
     // "X.Core(net8.0)" -> "X.Core"; only strips suffixes that look like a TFM so
