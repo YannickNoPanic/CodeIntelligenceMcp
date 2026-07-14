@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Fixture.Core\Fixture.Core.csproj" />
+    <ProjectReference Include="..\Fixture.Infrastructure\Fixture.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
