@@ -27,7 +27,15 @@ internal abstract class WorkspaceProviderBase<TIndex>(McpConfig config, ILogger 
         if (Path.IsPathRooted(workspace))
         {
             string normalizedPath = workspace.Replace('\\', '/');
-            ws = CreateAdHoc(normalizedPath);
+
+            // An absolute path to a configured workspace reuses that workspace's config and
+            // cache key — otherwise name-based and path-based calls build two full indexes.
+            WorkspaceConfig? configured = config.Workspaces.FirstOrDefault(w =>
+                w.Type == workspaceType
+                && GetConfiguredPath(w) is string p
+                && string.Equals(p.Replace('\\', '/'), normalizedPath, StringComparison.OrdinalIgnoreCase));
+
+            ws = configured ?? CreateAdHoc(normalizedPath);
         }
         else
         {
