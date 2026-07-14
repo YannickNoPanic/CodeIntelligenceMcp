@@ -65,6 +65,36 @@ public sealed class RoslynIntegrationTests(MsBuildFixture fixture)
     }
 
     [Fact]
+    public async Task DetectAsync_EmptyCatch_FlagsSwallowedException()
+    {
+        var detector = new ViolationDetector(fixture.Index, MsBuildFixture.CleanArch);
+
+        IReadOnlyList<ViolationResult> violations = await detector.DetectAsync("empty-catch", CancellationToken.None);
+
+        violations.Should().Contain(v => v.FilePath.EndsWith("BadPractices.cs"));
+    }
+
+    [Fact]
+    public async Task DetectAsync_ThrowEx_FlagsStackTraceReset()
+    {
+        var detector = new ViolationDetector(fixture.Index, MsBuildFixture.CleanArch);
+
+        IReadOnlyList<ViolationResult> violations = await detector.DetectAsync("throw-ex", CancellationToken.None);
+
+        violations.Should().Contain(v => v.FilePath.EndsWith("BadPractices.cs"));
+    }
+
+    [Fact]
+    public async Task DetectAsync_DtoInCore_FlagsOrderDto()
+    {
+        var detector = new ViolationDetector(fixture.Index, MsBuildFixture.CleanArch);
+
+        IReadOnlyList<ViolationResult> violations = await detector.DetectAsync("dto-in-core", CancellationToken.None);
+
+        violations.Should().Contain(v => v.FilePath.EndsWith("OrderDto.cs"));
+    }
+
+    [Fact]
     public async Task FindUsages_GreetUseCase_FindsInstantiationAndInjection()
     {
         IReadOnlyList<UsageResult> usages =
