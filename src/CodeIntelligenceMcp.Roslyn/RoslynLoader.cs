@@ -35,6 +35,24 @@ public static class RoslynLoader
     {
         RegisterMSBuild();
 
+        // .slnf: open the referenced solution but index only the filtered project subset.
+        // The fingerprint keeps using the original path — it only walks up to find .git.
+        IReadOnlySet<string>? projectAllowlist = null;
+        string openPath = solutionPath;
+        if (solutionPath.EndsWith(".slnf", StringComparison.OrdinalIgnoreCase))
+        {
+            SolutionFilterFile filter = SolutionFilterFile.Parse(solutionPath);
+            openPath = filter.SolutionPath;
+            projectAllowlist = filter.ProjectPaths;
+        }
+        else if (!solutionPath.EndsWith(".sln", StringComparison.OrdinalIgnoreCase)
+            && !solutionPath.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new WorkspaceLoadException(
+                $"'{solutionPath}' is not a .sln, .slnx, or .slnf file",
+                "Pass the path to a solution file, a solution filter, or a workspace name from mcp-config.json.");
+        }
+
         MSBuildWorkspace workspace = MSBuildWorkspace.Create();
 
         List<string> loadWarnings = [];
@@ -47,7 +65,7 @@ public static class RoslynLoader
         Microsoft.CodeAnalysis.Solution solution;
         try
         {
-            solution = await workspace.OpenSolutionAsync(solutionPath, cancellationToken: cancellationToken);
+            solution = await workspace.OpenSolutionAsync(openPath, cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -56,12 +74,12 @@ public static class RoslynLoader
         catch (Exception ex)
         {
             throw new WorkspaceLoadException(
-                $"Failed to load solution '{solutionPath}': {ex.Message}",
+                $"Failed to load solution '{openPath}': {ex.Message}",
                 "Check that the solution builds with 'dotnet build' on this machine.",
                 [.. loadWarnings.Take(3)]);
         }
 
-        RoslynWorkspaceIndex index = await RoslynWorkspaceIndex.BuildAsync(workspace, solution, cleanArch, loadWarnings, cancellationToken);
+        RoslynWorkspaceIndex index = await RoslynWorkspaceIndex.BuildAsync(workspace, solution, cleanArch, loadWarnings, cancellationToken, projectAllowlist);
         index.Fingerprint = Git.GitDiffService.ComputeFingerprint(solutionPath);
         return index;
     }

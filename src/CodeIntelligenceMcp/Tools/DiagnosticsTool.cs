@@ -6,7 +6,7 @@ public sealed class DiagnosticsTool(IWorkspaceProvider<RoslynWorkspaceIndex> ros
     [McpServerTool(Name = "get_diagnostics")]
     [Description("Get Roslyn compiler diagnostics for a .NET workspace, grouped by diagnostic code. Use after a refactor to check for new warnings, or as a cleanup starting point. Start with severity 'warning' and filter to one project to reduce noise. Does not duplicate architectural rules from find_violations — covers CS/IDE/CA compiler output only.")]
     public async Task<string> GetDiagnostics(
-        [Description("Workspace name from mcp-config.json, or an absolute path to a .sln/.slnx file for ad-hoc worktrees")] string workspace,
+        [Description("Workspace name from mcp-config.json, or an absolute path to a .sln/.slnx/.slnf file for ad-hoc worktrees")] string workspace,
         [Description("Minimum severity: 'error' | 'warning' | 'info'. Default 'warning'.")] string? severity = "warning",
         [Description("Filter to one project by exact name (e.g. 'Datalake2.Core')")] string? project = null,
         [Description("Filter by diagnostic code prefix: 'CS', 'IDE', 'CA', 'SA'")] string? category = null,

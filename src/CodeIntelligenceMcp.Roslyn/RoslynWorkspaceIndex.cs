@@ -155,7 +155,8 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         Solution solution,
         CleanArchitectureNames cleanArch,
         IReadOnlyList<string>? loadWarnings = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlySet<string>? projectAllowlist = null)
     {
         List<IndexedType> allTypes = [];
 
@@ -167,6 +168,11 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         foreach (Project project in solution.Projects)
         {
             if (!seenProjectFiles.Add(project.FilePath ?? project.Name))
+                continue;
+
+            // .slnf filter: only index the selected project subset.
+            if (projectAllowlist is not null
+                && (project.FilePath is null || !projectAllowlist.Contains(project.FilePath.Replace('\\', '/'))))
                 continue;
 
             Compilation? compilation = await project.GetCompilationAsync(cancellationToken);
