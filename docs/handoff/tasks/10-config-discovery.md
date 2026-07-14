@@ -1,6 +1,6 @@
 # Taak 10 — Config discovery + first-run reparatie
 
-**Status:** open. **Plansectie:** "Task 10". **Audit-bevindingen:** P4 (blocker,
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 10". **Audit-bevindingen:** P4 (blocker,
 first-run op schone clone faalt: `mcp-config.json` is gitignored maar de csproj
 eist hem als `<Content>`) en P5 (blocker, config alleen laadbaar naast de exe).
 

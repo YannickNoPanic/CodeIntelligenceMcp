@@ -1,6 +1,6 @@
 # Taak 9 — Log-rotatie + volledige exception-detail
 
-**Status:** open. **Plansectie:** "Task 9". **Audit-bevinding:** R8 — het log
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 9". **Audit-bevinding:** R8 — het log
 (`%TEMP%\CodeIntelligenceMcp.log`) groeit eeuwig (geen rotatie/cap), exceptions
 loggen alleen type+message zonder stack trace, en de timestamp gebruikt
 impliciete culture.

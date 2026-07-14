@@ -16,12 +16,14 @@ Testsuite bij handoff: **133/133 groen**.
 | 6. Staleness | zie git log | `IsStaleCached()` (10s TTL); alle CSharpTools/DiagnosticsTool-responses dragen een `stale`-vlag; wiki-banner gebruikt de cache; analyze_changes houdt het precieze `IsStale()`. |
 | 7. Git worktrees | zie git log | `.git`-als-file herkend; unborn-HEAD guards; base-branch fallback main → origin/main → master → origin/master → tracked branch; error noemt beschikbare branches. Tests in `GitDiffServiceTests.cs`. |
 | 8. Build-cancellation | zie git log | Gedeelde index-build draait op `CancellationToken.None`; callers verlaten via `WaitAsync(ct)`. |
+| 9. Log-rotatie | zie git log | Rol naar `.old` boven 10MB (IOException-tolerant voor tweede instantie); exceptions loggen volledige `ToString()`; timestamps InvariantCulture met ms. |
+| 10. Config discovery | zie git log | `--config`-arg → `CODEINTEL_CONFIG`-env → naast binary; missing config = warning + lege lijst (niet fataal); invalid JSON = duidelijke fout met pad; csproj-Content conditioneel — clean clone bouwt. |
 
 Controleer met `git log --oneline main..feature/audit-fixes`.
 
 ## Open
 
-Taken 9 t/m 21 — zie de tabel in [README.md](README.md) en de per-taak-files
+Taken 11 t/m 21 — zie de tabel in [README.md](README.md) en de per-taak-files
 in `tasks/`. Taak 17 is al half af: de `hasCmdletBinding`-typo is meegenomen in
 taak 4; alleen NSubstitute-verwijdering en Tomlyn-pin resteren.
 
