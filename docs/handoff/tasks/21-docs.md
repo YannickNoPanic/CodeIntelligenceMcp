@@ -1,6 +1,6 @@
 # Taak 21 — Documentatie-waarheidspas (ALS LAATSTE)
 
-**Status:** open. **Plansectie:** "Task 21". **Audit-bevindingen:** P7/P8/Q4/Q5 —
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 21". **Audit-bevindingen:** P7/P8/Q4/Q5 —
 stale docs, privé-paden in getrackte files, README-gaten, verkeerde versies in
 CLAUDE.md.
 

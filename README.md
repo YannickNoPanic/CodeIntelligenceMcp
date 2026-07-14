@@ -8,26 +8,35 @@ Supports five workspace types: **.NET/C#** (Roslyn), **Classic ASP/VBScript**, *
 
 ## Prerequisites
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- Visual Studio or MSBuild installed (required for .NET workspace loading)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download) — also provides the MSBuild instance used for .NET workspace loading (Visual Studio works too)
+
+**Platform support:** developed and tested on Windows. macOS/Linux should work via `dotnet publish -r <rid>` (e.g. `linux-x64`, `osx-arm64`) since workspace loading only needs the .NET SDK, but this is untested — feedback welcome.
 
 ---
 
 ## Setup
 
-**1. Clone and publish**
+**1. Clone and create your config**
 
 ```bash
 git clone https://github.com/YannickNoPanic/CodeIntelligenceMcp.git
 cd CodeIntelligenceMcp
+cp mcp-config.example.json mcp-config.json
+```
+
+`mcp-config.json` is gitignored (it contains your local paths); the example file shows all five workspace types.
+
+**2. Publish**
+
+```bash
 dotnet publish src/CodeIntelligenceMcp -c Release -r win-x64 --self-contained false -o publish
 ```
 
 This produces a standalone `publish/CodeIntelligenceMcp.exe`. Using a published exe is strongly recommended over `dotnet run` — it avoids build-output locking when multiple Claude Code sessions run in parallel and starts faster.
 
-**2. Configure workspaces**
+**3. Configure workspaces**
 
-Edit `mcp-config.json` in the repo root with your absolute paths:
+Edit `mcp-config.json` with your absolute paths:
 
 ```json
 {
@@ -66,11 +75,25 @@ Edit `mcp-config.json` in the repo root with your absolute paths:
 }
 ```
 
-`cleanArchitecture` is optional — omit it if your .NET workspace does not follow Clean Architecture.
+`cleanArchitecture` is optional. It names the projects that the layer-based violation rules (`core-no-http`, `layer-boundary`, `dto-in-core`, ...) treat as Core/Infrastructure/Web. When omitted, the server auto-detects by naming convention (`*.Core`, `*.Infrastructure`/`.Infra`/`.Data`/`.Persistence`, `*.Web`/`.Api`/`.Mvc`); if neither matches, those rules simply return no results.
 
-**3. Register with Claude Code (stdio — recommended)**
+**Config discovery:** the server looks for its config in this order:
 
-Add to `~/.claude/settings.json` (global, works across all projects):
+1. `--config <path>` command-line argument
+2. `CODEINTEL_CONFIG` environment variable
+3. `mcp-config.json` next to the executable (the publish step copies the repo-root file there)
+
+A missing config is not fatal — the server starts with zero configured workspaces, and every dotnet tool also accepts an absolute `.sln`/`.slnx`/`.slnf` path directly (useful for git worktrees). Note: after publishing, the exe reads the copy in `publish/`, not the repo root — pass `--config` or republish after config changes.
+
+**4. Register with Claude Code (stdio — recommended)**
+
+The quickest way:
+
+```bash
+claude mcp add --scope user code-intelligence -- C:/path/to/CodeIntelligenceMcp/publish/CodeIntelligenceMcp.exe
+```
+
+Or add it to `~/.claude/settings.json` manually (global, works across all projects):
 
 ```json
 {
@@ -83,7 +106,21 @@ Add to `~/.claude/settings.json` (global, works across all projects):
 }
 ```
 
-Point `command` at the published exe from step 1. Claude Code spawns a fresh server process per session — no separate process to manage.
+Point `command` at the published exe from step 2. Claude Code spawns a fresh server process per session — no separate process to manage.
+
+For a per-project setup, put the same server block in a `.mcp.json` at the project root instead:
+
+```json
+{
+  "mcpServers": {
+    "code-intelligence": {
+      "type": "stdio",
+      "command": "C:/path/to/CodeIntelligenceMcp/publish/CodeIntelligenceMcp.exe",
+      "args": ["--config", "C:/path/to/this-project/mcp-config.json"]
+    }
+  }
+}
+```
 
 > **Development alternative:** If you are actively modifying the server, you can use `dotnet run` instead:
 > ```json
@@ -99,7 +136,9 @@ Point `command` at the published exe from step 1. Claude Code spawns a fresh ser
 > ```
 > Re-run `dotnet build` after each change. Avoid using this when running multiple Claude sessions simultaneously.
 
-**3b. SSE mode (optional)**
+**4b. SSE mode (optional, local development only)**
+
+SSE mode ships a stub OAuth endpoint that validates nothing — it exists purely so Claude Code can complete its auth handshake against localhost. Never expose this port beyond your own machine.
 
 Start the server manually:
 
@@ -137,19 +176,21 @@ The default port is `5100`. Override via `appsettings.json`:
 | Tool | Description |
 |---|---|
 | `get_codebase_wiki` | Architecture overview, violations, hotspots — call this first each session |
+| `list_workspaces` | All configured workspaces with type, path, and loaded state |
 | `refresh_workspace` | Clear cached index and force reload on next tool call |
 
 ### .NET / C# (dotnet workspaces)
 
 | Tool | Description |
 |---|---|
-| `search_symbol` | Fuzzy search across all symbols |
-| `find_types` | Search types by name, namespace, interface, attribute, or kind |
+| `search_symbol` | Search symbols by substring or glob (`*`/`?`), compiler-generated members excluded |
+| `find_types` | Search types by name (glob supported), namespace, interface (incl. generic args), attribute, or kind |
 | `get_type` | Full type info: members, base types, attributes, file location |
 | `get_method` | Method signature, parameters, return type, body |
-| `find_implementations` | All implementations of an interface |
+| `find_implementations` | All implementations of an interface (generic args supported: `IUseCase<Req, Res>`) |
+| `find_derived_types` | All types deriving from a base class, at any depth |
 | `find_usages` | All usages of a type across the codebase |
-| `find_callers` | All callers of a method |
+| `find_callers` | Callers of a method, optionally transitive (`depth` up to 3) |
 | `get_public_surface` | Public API of a namespace or project |
 | `get_dependencies` | Dependencies of a type or namespace |
 | `get_coupling` | Coupling metrics between modules |
@@ -223,6 +264,9 @@ The default port is `5100`. Override via `appsettings.json`:
 - Workspaces are **lazy-loaded**: indexed on the first tool call per session, not at startup
 - Each stdio session starts a fresh server with its own in-memory cache; use `refresh_workspace` to reload within a session
 - `mcp-config.json` uses absolute paths — no environment variable substitution
+- List tools cap results at 100 by default (`maxResults`, 0 = unlimited) and return a `{ total, returned, truncated, items }` envelope; file paths in responses are workspace-relative
+- When files changed since indexing, dotnet responses carry `"stale": true` — call `refresh_workspace` for current results
+- Full per-tool reference with parameters: [docs/TOOLS.md](docs/TOOLS.md)
 
 ---
 

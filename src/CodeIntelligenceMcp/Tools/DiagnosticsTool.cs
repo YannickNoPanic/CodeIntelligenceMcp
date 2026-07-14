@@ -8,7 +8,7 @@ public sealed class DiagnosticsTool(IWorkspaceProvider<RoslynWorkspaceIndex> ros
     public async Task<string> GetDiagnostics(
         [Description("Workspace name from mcp-config.json, or an absolute path to a .sln/.slnx/.slnf file for ad-hoc worktrees")] string workspace,
         [Description("Minimum severity: 'error' | 'warning' | 'info'. Default 'warning'.")] string? severity = "warning",
-        [Description("Filter to one project by exact name (e.g. 'Datalake2.Core')")] string? project = null,
+        [Description("Filter to one project by exact name (e.g. 'MyApp.Core')")] string? project = null,
         [Description("Filter by diagnostic code prefix: 'CS', 'IDE', 'CA', 'SA'")] string? category = null,
         CancellationToken ct = default)
     {

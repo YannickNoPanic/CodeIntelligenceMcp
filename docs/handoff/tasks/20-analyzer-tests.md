@@ -1,6 +1,6 @@
 # Taak 20 — Analyzer-tests: Complexity, Coupling, Risk, PatternScanner
 
-**Status:** open. **Plansectie:** "Task 20". **Audit-bevinding:** Q1 — alle
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 20". **Audit-bevinding:** Q1 — alle
 analyzers achter de headline-features zijn ongetest.
 
 ## Aan te maken

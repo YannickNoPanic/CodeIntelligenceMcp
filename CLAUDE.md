@@ -3,7 +3,8 @@
 ## What this project is
 
 A .NET 10 MCP server (stdio transport) that gives Claude Code structured,
-token-efficient access to two codebases without Claude needing to read files directly.
+token-efficient access to codebases without Claude needing to read files directly.
+Supports five workspace types: dotnet (Roslyn), asp-classic, powershell, python, javascript.
 
 Workspaces are **lazy-loaded**: the server starts instantly and indexes on the first tool call
 per workspace. Subsequent calls are instant. All tools are **read-only**.
@@ -15,16 +16,23 @@ No write operations, no file watchers, no hot reload.
 
 ```bash
 dotnet build src/CodeIntelligenceMcp                         # build the server
-dotnet test tests/CodeIntelligenceMcp.Tests                  # run unit tests
+dotnet test tests/CodeIntelligenceMcp.Tests                  # run all tests (unit + integration)
 dotnet run --project src/CodeIntelligenceMcp --no-launch-profile -c Release --no-build  # run server (stdio)
 ```
+
+Build/test outputs may be locked by live MCP server processes. Never kill those
+processes — build to an isolated output dir instead (`-o <tempdir>`).
 
 ---
 
 ## Reference docs
 
-- **TASK.md** — full tool signatures and output contracts
-- **PLAN.md** — implementation history (all phases complete)
+- **docs/TOOLS.md** — per-tool reference (regenerated from the tool attributes)
+- **docs/handoff/CONVENTIONS.md** — mandatory implementation patterns (response
+  pipeline, error boundary, path relativization, matchers)
+- **docs/product-audit-2026-07-06.md** — the audit that drove the current shape
+- **TASK.md / PLAN.md** — original build spec and history (partially stale; do not
+  treat as current contracts)
 
 ---
 
@@ -33,7 +41,7 @@ dotnet run --project src/CodeIntelligenceMcp --no-launch-profile -c Release --no
 ```
 src/
   CodeIntelligenceMcp/          # MCP server entry point (Exe)
-  CodeIntelligenceMcp.Common/   # Shared utilities (SourceFileWalker) for the file-walk indexers
+  CodeIntelligenceMcp.Common/   # Shared utilities (SourceFileWalker, NameMatcher) for the file-walk indexers
   CodeIntelligenceMcp.Roslyn/   # C# + Blazor indexer (Roslyn + MSBuild.Locator)
   CodeIntelligenceMcp.AspClassic/  # Classic ASP + SQL indexer
   CodeIntelligenceMcp.JavaScript/  # JS/TS/Vue indexer (line-based)
@@ -41,29 +49,38 @@ src/
   CodeIntelligenceMcp.PowerShell/  # PowerShell indexer
   VBScript.Parser/              # Forked from YannickNoPanic/vbscript-parser, owned source
 tests/
-  CodeIntelligenceMcp.Tests/    # xUnit + FluentAssertions + NSubstitute
+  CodeIntelligenceMcp.Tests/    # xUnit + FluentAssertions (unit + Integration/ against the fixture)
+  fixtures/FixtureSolution/     # 3-project solution loaded via real MSBuildWorkspace in integration tests
 ```
 
 ---
 
-## Target workspaces
+## Workspace configuration
 
-Defined in `mcp-config.json` (root of repo). Paths are absolute — no variable substitution.
+Workspaces are defined in `mcp-config.json` — **gitignored**, copy
+`mcp-config.example.json` to get started. Paths are absolute, no variable
+substitution. Config discovery order: `--config` CLI arg, `CODEINTEL_CONFIG`
+env var, file next to the binary. Missing config is non-fatal (ad-hoc absolute
+`.sln`/`.slnx`/`.slnf` paths work on every dotnet tool).
 
-| Name | Type | Path |
-|---|---|---|
-| `datalake2` | `dotnet` | `C:/Git/Datalake2.0/Datalake2.sln` |
-| `datalake1` | `asp-classic` | `C:/Git/WR_Development_datalake_portal` |
+---
 
-Clean Architecture projects for datalake2: `Datalake2.Core`, `Datalake2.Infrastructure`, `Datalake2` (web).
+## Server conventions (enforced — see docs/handoff/CONVENTIONS.md for detail)
+
+- All tool responses go through `Tools/ToolResponses.cs`: `Ok`, `OkList`
+  (envelope `{ total, returned, truncated, stale?, hint?, items }`), `Err`.
+  Never introduce a second serializer or envelope style.
+- All workspace access goes through `Workspaces/WorkspaceAccess.GetAsync` —
+  it converts every failure into short, actionable error JSON. Indexer load
+  failures throw `WorkspaceLoadException(message, hint, detail)`.
+- Response file paths are workspace-relative (forward slashes) via
+  `RoslynWorkspaceIndex.Rel()`; internal storage stays absolute.
+- Name matching: `SymbolQueryMatcher` (Roslyn) / `NameMatcher` (Common) —
+  deliberately duplicated because `.Roslyn` must not depend on `.Common`.
 
 ---
 
 ## Key technical decisions
-
-### Config loading
-`mcp-config.json` uses hardcoded absolute paths — the `${VAR}` substitution described in
-TASK.md is **not needed**. `McpConfigLoader` just deserializes and validates paths exist.
 
 ### VBScript.Parser
 Copied from `vbscript-parser/VBScript.Parser/` into `src/VBScript.Parser/`.
@@ -71,12 +88,11 @@ Changes made (documented in `src/VBScript.Parser/CHANGES.md`):
 - Retargeted from `netstandard2.0` to `net10.0`
 - Fixed `Range` ambiguity (CS0104): `new Range(...)` → `new Ast.Range(...)` in `VBScriptParser.cs`
 
-### ModelContextProtocol
-Resolved to **1.2.0** (latest stable at time of scaffold). Use stdio transport.
-
-### Roslyn packages
-`Microsoft.CodeAnalysis.CSharp.Workspaces` + `Microsoft.CodeAnalysis.Workspaces.MSBuild` 4.13.0,
-`Microsoft.Build.Locator` 1.7.8. Call `MSBuildLocator.RegisterDefaults()` before opening workspace.
+### Package versions (as pinned in the csproj files)
+`ModelContextProtocol` 1.1.0 (stdio transport), `Microsoft.CodeAnalysis.*` 5.3.0,
+`Microsoft.Build.Locator` 1.11.2, `LibGit2Sharp` 0.31.0, `Tomlyn` 0.17.0.
+`RoslynLoader.RegisterMSBuild()` guards `MSBuildLocator.RegisterDefaults()` —
+always call through it, never register directly.
 
 ---
 
@@ -97,3 +113,4 @@ Resolved to **1.2.0** (latest stable at time of scaffold). Use stdio transport.
 - No EF Core anywhere in this project
 - No DI extension methods per domain — `Program.cs` registers everything directly
   (project is small enough that `AddCore()` / `AddInfrastructure()` would be over-engineering)
+- No NSubstitute in tests — fakes are small inline classes

@@ -19,6 +19,16 @@
       "name": "my-classic-asp-app",
       "type": "asp-classic",
       "rootPath": "C:/path/to/ClassicAspApp"
+    },
+    {
+      "name": "my-python-project",
+      "type": "python",
+      "rootPath": "C:/path/to/PythonProject"
+    },
+    {
+      "name": "my-frontend",
+      "type": "javascript",
+      "rootPath": "C:/path/to/JsProject"
     }
   ]
 }

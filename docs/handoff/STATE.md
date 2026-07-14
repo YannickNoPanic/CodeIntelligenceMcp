@@ -25,13 +25,19 @@ Testsuite bij handoff: **133/133 groen**.
 | 15. Partial classes | zie git log | `PickPrimaryLocation` prefereert niet-gegenereerde declaratie (geen obj/, .g.cs, .generated.cs). |
 | 16. Ad-hoc cache | zie git log | Absoluut pad naar geconfigureerde workspace hergebruikt diens config en cache key. |
 | 17. Kleine fixes | zie git log | NSubstitute verwijderd, Tomlyn gepind op 0.17.0 (typo was al in taak 4 gedaan). |
+| 18. Fixture + integratie | zie git log | 3-project fixture-solution (`tests/fixtures/FixtureSolution`) + 16 integratietests via echte MSBuildWorkspace-route (load, relative paths, callers depth 2, violations, complexity, change risk). |
+| 19. ViolationDetector-tests | zie git log | Symbol-based rules in-memory (TestIndex-helper); document-based rules via fixture-bait (BadPractices.cs, OrderDto.cs). |
+| 20. Analyzer-tests | zie git log | Coupling, Risk-hotspots, PatternScanner in-memory; Complexity + GetChangeRiskAsync via fixture (ComplexMethod.cs). |
+| 21. Docs | zie git log | README (copy-config-stap, config discovery, claude mcp add, platform-statement, SSE-waarschuwing), TOOLS.md volledig geregenereerd uit de attributen (50 tools), CLAUDE.md-versies gecorrigeerd, example-config compleet, Datalake-voorbeelden uit tool-descriptions. |
 
 Controleer met `git log --oneline main..feature/audit-fixes`.
 
 ## Open
 
-Taken 18 t/m 21 — zie de tabel in [README.md](README.md) en de per-taak-files
-in `tasks/`.
+Alle 21 taken zijn afgerond (eindstand: 180/180 tests groen). Resterend en
+bewust bij de gebruiker gelaten: licentie/LICENSE, toolnaam, dotnet-tool-
+packaging, CI-pipeline, en het opruimen/scrubben van interne historie-docs
+(TASK.md, ARCHITECTURE.md, PLAN*.md bevatten nog privé-paden).
 
 ## Belangrijke afwijkingen t.o.v. het originele plan
 

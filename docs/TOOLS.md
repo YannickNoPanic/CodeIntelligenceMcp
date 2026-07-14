@@ -1,301 +1,250 @@
 # CodeIntelligenceMcp — Tool Reference
 
-All tools are read-only. Workspace names come from `mcp-config.json`.
+CodeIntelligenceMcp is a .NET MCP server (stdio transport) that gives structured,
+token-efficient access to indexed codebases instead of reading files directly.
+All tools are **read-only**. Workspaces are **lazy-loaded**: the first tool call
+against a workspace triggers indexing; later calls reuse the in-memory index
+until the workspace changes or `refresh_workspace` is called.
 
-### Worktree support
+## The `workspace` parameter
 
-The `workspace` parameter on all tools accepts either:
-- A **name** from `mcp-config.json` (e.g. `"datalake2"`)
-- An **absolute path** to a `.sln` or `.slnx` file (e.g. `"C:/Git/Datalake2-feature/Datalake2.sln"`)
+Every tool takes a `workspace` argument. Two forms are accepted:
 
-Use the path form when analyzing a git worktree that isn't pre-configured. Clean Architecture violation rules that require project names (core-no-ef, etc.) will not fire for ad-hoc paths since there is no config to map project names.
+- **A name from `mcp-config.json`** — e.g. `"myapp"`. Use `list_workspaces` to see what is
+  configured, including type and whether it is currently loaded.
+- **An absolute path**, for ad-hoc use against a workspace that isn't pre-configured:
+  - C#/.NET tools: an absolute path to a `.sln`, `.slnx`, or `.slnf` file, e.g.
+    `C:/path/to/MyApp.sln`.
+  - Classic ASP, JavaScript/TypeScript, Python, and PowerShell tools: an absolute path to
+    the workspace root directory.
 
----
+Ad-hoc paths work for lookup and search, but Clean Architecture rules that depend on named
+projects (`core-no-ef`, etc.) only fire for workspaces declared in `mcp-config.json`, since
+there is no project-name mapping for an unregistered path.
 
-## Tool Use Priority
-
-Start every session with this order:
-
-1. **`get_codebase_wiki`** — understand what's there and what's wrong
-2. **`analyze_changes`** — if on a branch, understand what changed vs main
-3. Drill down with specific tools as needed
-
-Do not read files directly when a tool can answer the question.
-
----
-
-## Overview Tools
-
-### `get_codebase_wiki`
-
-**Purpose**: Single-call codebase overview. Project structure, architectural patterns, and health summary (violations). The entry point for any new session.
-
-**When to use**: First call in any session touching a .NET workspace. Also use with `focusArea` when starting work on a specific domain.
-
-**When NOT to use**: When you already have a current wiki from this session.
-
-**Parameters**:
-- `workspace` — workspace name (e.g. `"datalake2"`) or absolute path to a `.sln`/`.slnx` file
-- `focusArea` — namespace prefix to scope output (e.g. `"Datalake2.Core.Features.Devices"`)
-- `includePatterns` — include use cases, repositories, vertical slices (default `true`)
-- `includeViolations` — include architectural violations health section (default `true`)
-- `includeMetrics` — include type/file counts (default `false`)
-
-**Output**: Markdown with sections: Project Structure, Architectural Patterns, Health Summary.
-
-**Companion tools**: `find_violations` for the full violations list, `get_diagnostics` for compiler warnings.
+If a workspace name or path cannot be resolved, tools return an error object with a `hint`
+listing the known workspaces of that type (see Response Envelope below) — never a silent
+fallback or a stack trace.
 
 ---
 
-### `analyze_changes`
+## Response Envelope
 
-**Purpose**: Git-aware analysis of current branch vs base branch. Returns changed files, affected types, public API signature changes, violations scoped to changed code, and diagnostics in changed files.
+All JSON-returning tools share one of three shapes. Wiki tools (`get_codebase_wiki`,
+`get_js_wiki`, `get_python_wiki`, `get_powershell_wiki`) are the exception — they return
+**Markdown**, not JSON.
 
-**When to use**: When on a feature branch, before merge, or after a refactor. Replaces reading git diffs and changed files manually.
+### List tools
 
-**Parameters**:
-- `workspace` — workspace name
-- `baseBranch` — branch to compare against (default `"main"`)
-- `includeSignatures` — detect public API signature changes (default `true`)
-- `includeDiagnostics` — include Roslyn diagnostics scoped to changed files (default `true`)
+Tools that return a collection wrap it in an envelope with truncation metadata:
 
-**Output**:
 ```json
 {
-  "summary": { "changedFiles": 12, "affectedDomains": ["Devices"], "violationsCount": 2, ... },
-  "changedFiles": [{ "filePath": "...", "status": "modified", "affectedTypes": ["DeviceMonitoringQuery"] }],
-  "signatureChanges": [...],
-  "violationsInChanges": [...],
-  "diagnosticsInChanges": [...],
-  "newTypes": [...]
+  "total": 143,
+  "returned": 100,
+  "truncated": true,
+  "stale": true,
+  "hint": "truncated — refine the query or raise maxResults",
+  "items": [ ... ]
 }
 ```
 
-**Companion tools**: `find_violations` for full workspace violations, `get_diagnostics` for all diagnostics.
+- `total` — total matches found before truncation.
+- `returned` — number of items actually included in `items`.
+- `truncated` — `true` when `total` exceeds `returned`.
+- `maxResults` (input parameter) defaults to `100`; pass `0` for unlimited.
+- `stale` and `hint` are omitted (not just `false`/`null`) unless relevant. `stale: true`
+  means source files changed since the index was built — call `refresh_workspace`.
+  `hint` explains the `truncated` or `stale` condition; a truncation hint takes priority
+  when both apply.
+
+### Single-object tools
+
+Tools that return one object (e.g. `get_type`, `get_dependencies`) return the object
+directly:
+
+```json
+{ "name": "MyType", "kind": "class", "members": [ ... ] }
+```
+
+If the underlying index is stale, the object is wrapped instead:
+
+```json
+{ "stale": true, "hint": "index may be outdated — call refresh_workspace to rebuild", "result": { ... } }
+```
+
+### Errors
+
+Any failure — workspace not found, symbol not found, invalid rule name, ambiguous type
+name — returns:
+
+```json
+{ "error": "type not found", "hint": "known dotnet workspaces: myapp — or pass an absolute path", "detail": null }
+```
+
+`hint` and `detail` are omitted when not applicable. Type-name lookups that match more than
+one fully-qualified type return an `ambiguous type name` error with all candidates in
+`detail` instead of guessing.
+
+### Wildcard search syntax
+
+Search and "find" tools that accept a `query`, `nameContains`, `functionName`, or
+`className`-style parameter support two matching modes on the same argument:
+
+- If the value contains `*` or `?`, it is treated as a **glob** matched against the full
+  symbol/function/class name (`*` = any run of characters, `?` = any single character).
+- Otherwise it is a **case-insensitive substring** match.
+
+Example: `find_types nameContains="*Request"` matches every type whose name ends in
+`Request`; `find_types nameContains="request"` matches any type with `request` anywhere in
+its name, case-insensitively.
 
 ---
 
 ## C# / .NET Tools (Roslyn-backed)
 
-### `get_type`
+Source: `src/CodeIntelligenceMcp/Tools/CSharpTools.cs`. All require a `dotnet` workspace
+(name from `mcp-config.json`, or an absolute `.sln`/`.slnx`/`.slnf` path).
 
-**Purpose**: Full structural details of one type: properties, methods, base type, interfaces, attributes.
+| Tool | Purpose | Parameters |
+|---|---|---|
+| `get_type` | Full structural details of a type: properties, methods, base type, interfaces, attributes. | `workspace`; `typeName` — simple or fully qualified type name |
+| `find_types` | Search for types by name, namespace, interface, attribute, or kind. | `workspace`; `nameContains` (default none) — substring or glob; `namespace` (default none) — exact or prefix match; `implementsInterface` (default none); `hasAttribute` (default none); `kind` (default none) — class/interface/record/enum; `maxResults` (default 100, 0 = unlimited) |
+| `get_method` | Full source body of a specific method, without opening the file. | `workspace`; `typeName`; `methodName` |
+| `find_implementations` | All concrete types implementing a given interface. | `workspace`; `interfaceName` — simple name or with type args, e.g. `IUseCase<CreateRequest, Result>`; `maxResults` (default 100, 0 = unlimited) |
+| `find_derived_types` | All types deriving from a given base class, at any depth (complements `find_implementations` for interfaces). | `workspace`; `baseTypeName`; `maxResults` (default 100, 0 = unlimited) |
+| `find_usages` | All usages of a type, method, or field across the workspace. | `workspace`; `symbolName`; `maxResults` (default 100, 0 = unlimited) |
+| `get_dependencies` | Constructor-injected dependencies of a type. | `workspace`; `typeName` |
+| `get_public_surface` | All public types in a namespace: interfaces, classes, records, enums. | `workspace`; `namespace` — exact or prefix match |
+| `get_project_dependencies` | Project dependency graph — which projects reference which. | `workspace` |
+| `search_symbol` | Substring/glob search across all symbol names (types, methods, properties); compiler-generated members excluded. | `workspace`; `query`; `maxResults` (default 100, 0 = unlimited) |
+| `scan_patterns` | Count types, interfaces, use cases, Razor components; run all violation rules. Quick structural health check. | `workspace` |
+| `get_test_coverage` | Which use cases have a matching `*Tests` class in any `.Tests` project (convention-based). Returns coverage percentage and uncovered use cases. | `workspace` |
+| `get_complexity` | Methods ordered by cyclomatic complexity or line count. | `workspace`; `minComplexity` (default 5); `projectFilter` (default none) — substring match; `minLines` (default 0 = disabled); `sortBy` (default `"complexity"`, or `"lines"`); `maxResults` (default 100, 0 = unlimited) |
+| `scan_all_violations` | Run every violation rule in one call; returns only rules with violations, ordered by count descending. | `workspace`; `maxPerRule` (default 50, 0 = unlimited) |
+| `find_dead_code` | Private methods, properties, and fields with no references. | `workspace`; `projectFilter` (default none) — substring match; `maxResults` (default 100, 0 = unlimited) |
+| `find_callers` | Callers of a method, optionally transitive (callers-of-callers). Returns caller type, method, file, line, calling line text, and depth. | `workspace`; `typeName` — owning type; `methodName`; `maxResults` (default 100, 0 = unlimited); `depth` (default 1, clamped 1-3) — 1 = direct callers only |
+| `get_coupling` | Types ordered by efferent coupling (unique external types depended on). | `workspace`; `minCoupling` (default 5); `projectFilter` (default none) — substring match; `maxResults` (default 100, 0 = unlimited) |
+| `get_hotspots` | Top N types by combined risk score (coupling + complexity + missing tests) — no type name needed. | `workspace`; `topN` (default 20); `projectFilter` (default none) — substring match |
+| `find_circular_dependencies` | Cycles in the project dependency graph, each returned as an ordered list of project names. | `workspace` |
+| `get_change_risk` | Refactoring risk score (0-100) for a type, based on referencing types, coupling, max complexity, and test coverage. | `workspace`; `typeName` |
+| `find_violations` | Run one specific architectural rule across the workspace. See rule table below. | `workspace`; `rule`; `projectFilter` (default none) — substring match on file path; `maxResults` (default 100, 0 = unlimited) |
+| `analyze_file` | Structural observations for a single `.cs`/`.razor` file: missing `CancellationToken`, layer violations, inline types, JSON in view. | `workspace`; `filePath` — relative to solution root, or absolute |
 
-**When to use**: When you know the type name and need its members. More efficient than reading the file.
+### `find_violations` rule keys
 
-**Parameters**: `workspace`, `typeName` (simple or FQN)
-
----
-
-### `find_types`
-
-**Purpose**: Discover types by name substring, namespace, implemented interface, attribute, or kind.
-
-**When to use**: When you don't know the exact type name, or want all types in a domain/namespace.
-
-**Example**: `find_types workspace="datalake2" namespace="Datalake2.Core.Features.Devices"` lists everything in the Devices domain.
-
----
-
-### `get_method`
-
-**Purpose**: Full source body of a specific method without reading the file.
-
-**Parameters**: `workspace`, `typeName`, `methodName`
-
----
-
-### `find_implementations`
-
-**Purpose**: All concrete types implementing a given interface.
-
-**When to use**: To map an interface to its implementations, understand injection candidates.
-
----
-
-### `find_usages`
-
-**Purpose**: All usages of a symbol (type, method, field) across the workspace.
-
-**When to use**: Before refactoring, to understand blast radius of a change.
+`core-no-ef`, `core-no-http`, `core-no-azure`, `usecase-not-sealed`, `inline-viewmodel-razor`,
+`business-logic-in-razor`, `json-parsing-in-view`, `blazor-injects-infra`,
+`controller-not-thin`, `dto-in-core`, `missing-cancellation-token`, `no-async-void`,
+`async-over-sync`, `use-case-not-thin`, `empty-catch`, `throw-ex`, `layer-boundary`,
+`too-many-params`, `services-in-web`, `missing-interface`, `direct-instantiation`.
 
 ---
 
-### `get_dependencies`
+## Wiki, Diagnostics, and Change Analysis (Roslyn-backed)
 
-**Purpose**: Constructor-injected dependencies of a type.
+Source: `src/CodeIntelligenceMcp/Tools/CodebaseWikiTool.cs`,
+`ChangeAnalysisTool.cs`, `DiagnosticsTool.cs`.
 
-**When to use**: To understand what a class needs without reading it.
-
----
-
-### `get_public_surface`
-
-**Purpose**: All public types in a namespace: interfaces, classes, records, enums.
-
-**When to use**: To understand what a layer exposes as its contract.
-
----
-
-### `get_project_dependencies`
-
-**Purpose**: Project dependency graph — which projects reference which.
-
-**When to use**: To verify Clean Architecture layering or understand build order.
-
----
-
-### `search_symbol`
-
-**Purpose**: Substring search across all symbol names (types, methods, properties).
-
-**When to use**: When you know part of a name but not the full path.
-
----
-
-### `scan_patterns`
-
-**Purpose**: Counts types, interfaces, use cases, razor components, and runs all violation rules in one call.
-
-**When to use**: Quick structural health check when `get_codebase_wiki` is too broad.
-
----
-
-### `find_violations`
-
-**Purpose**: Run one specific architectural rule across the full workspace.
-
-**Supported rules**:
-| Rule | Detects |
-|---|---|
-| `core-no-ef` | EF Core references in Core project |
-| `core-no-http` | HTTP client references in Core project |
-| `core-no-azure` | Azure SDK references in Core project |
-| `usecase-not-sealed` | Non-sealed IUseCase implementations |
-| `inline-viewmodel-razor` | Private class inside Razor @code block |
-| `business-logic-in-razor` | Use case calls or heavy LINQ in Razor |
-| `json-parsing-in-view` | JsonDocument/JsonSerializer in Razor |
-| `controller-not-thin` | Controller action with >10 lines of logic |
-| `dto-in-core` | Types with Dto suffix in Core project |
-
----
-
-### `analyze_file`
-
-**Purpose**: Structural observations for a single .cs or .razor file: missing CancellationToken, layer violations, inline types, JSON in view.
-
-**When to use**: After `scan_patterns` or `find_violations` identifies an issue file, to get line-level detail.
-
-**Parameters**: `workspace`, `filePath` (relative to solution root or absolute)
-
----
-
-### `get_diagnostics`
-
-**Purpose**: Roslyn compiler diagnostics (CS/IDE/CA codes) grouped by diagnostic ID. Covers compiler output — does not duplicate `find_violations` architectural rules.
-
-**When to use**: After a refactor to check for new warnings. Start filtered to one project and `severity=warning` to avoid noise.
-
-**Parameters**:
-- `workspace`
-- `severity` — `"error"` | `"warning"` | `"info"` (default `"warning"`)
-- `project` — filter to one project by exact name
-- `category` — filter by code prefix: `"CS"`, `"IDE"`, `"CA"`, `"SA"`
-
-**Output**:
-```json
-{
-  "totalDiagnostics": 187,
-  "groups": [
-    { "id": "CS8600", "severity": "warning", "count": 23, "examples": [...] }
-  ]
-}
-```
+| Tool | Purpose | Parameters |
+|---|---|---|
+| `get_codebase_wiki` | Compact hierarchical overview of a .NET codebase: project structure, architectural patterns, health summary (violations), optional metrics. Call first in any session. Returns Markdown, not JSON. | `workspace`; `focusArea` (default none) — namespace prefix, e.g. `MyApp.Core.Features.Orders`; `includePatterns` (default `true`); `includeViolations` (default `true`); `includeMetrics` (default `false`) |
+| `analyze_changes` | Git diff analysis between HEAD and a base branch: changed files, affected types, public API signature changes, violations and diagnostics scoped to changed code. | `workspace`; `baseBranch` (default `"main"`); `includeSignatures` (default `true`); `includeDiagnostics` (default `true`); `includeUncommitted` (default `false`) — also include staged + unstaged working-tree changes |
+| `get_diagnostics` | Roslyn compiler diagnostics (CS/IDE/CA/SA codes), grouped by diagnostic ID. Does not duplicate `find_violations` architectural rules. | `workspace`; `severity` (default `"warning"`) — `"error"` \| `"warning"` \| `"info"`; `project` (default none) — exact project name; `category` (default none) — code prefix filter |
 
 ---
 
 ## Classic ASP Tools
 
-### `asp_get_file`
+Source: `src/CodeIntelligenceMcp/Tools/AspClassicTools.cs`. Require an `asp-classic`
+workspace (name from `mcp-config.json`, or an absolute path to the ASP root directory).
 
-**Purpose**: Full structure of an ASP file: includes, subs, functions, variables, VBScript blocks.
-
-**When to use**: Instead of reading the .asp file directly.
-
----
-
-### `asp_find_symbol`
-
-**Purpose**: Find subs, functions, variables, or call sites by name across all ASP files.
-
----
-
-### `asp_get_includes`
-
-**Purpose**: Include chain for an ASP file: direct and transitive includes with depth.
-
----
-
-### `asp_search`
-
-**Purpose**: Substring search across VBScript content in all ASP files.
+| Tool | Purpose | Parameters |
+|---|---|---|
+| `asp_get_file` | Full structure of a Classic ASP file: includes, subs, functions, variables, VBScript blocks. | `workspace`; `filePath` |
+| `asp_find_symbol` | Find subs, functions, variables, or call sites by name (whole-word match) across all ASP files. | `workspace`; `symbolName`; `maxResults` (default 100, 0 = unlimited) |
+| `asp_get_includes` | Include chain for an ASP file: direct includes and transitive includes with depth. | `workspace`; `filePath` |
+| `asp_search` | Case-insensitive substring search across VBScript content in all ASP files. | `workspace`; `query`; `maxResults` (default 100, 0 = unlimited) |
 
 ---
 
 ## SQL Tools (Classic ASP workspaces)
 
-### `sql_find_table`
+Source: `src/CodeIntelligenceMcp/Tools/SqlTools.cs`. Same `asp-classic` workspace
+requirement as the Classic ASP tools above; these do not accept `maxResults` (unbounded).
 
-**Purpose**: All SQL queries referencing a given table, with operation type and columns.
-
----
-
-### `sql_get_signatures`
-
-**Purpose**: All normalised SQL query signatures from a single ASP file.
-
----
-
-### `sql_find_column`
-
-**Purpose**: All queries referencing a given column.
+| Tool | Purpose | Parameters |
+|---|---|---|
+| `sql_find_table` | All SQL queries referencing a given table: operation type, signature, columns. | `workspace`; `tableName` |
+| `sql_get_signatures` | All normalised SQL query signatures from a single ASP file. | `workspace`; `filePath` |
+| `sql_find_column` | All SQL queries referencing a given column. | `workspace`; `columnName` |
+| `sql_list_tables` | All tables in the workspace, sorted by usage count, with per-file usage. | `workspace` |
 
 ---
 
-### `sql_list_tables`
+## JavaScript / TypeScript Tools
 
-**Purpose**: All tables in the workspace sorted by usage count.
+Source: `src/CodeIntelligenceMcp/Tools/JsTools.cs`. Require a `javascript` workspace
+(name from `mcp-config.json`, or an absolute path to the project root).
 
-**When to use**: To understand data access patterns across the full ASP codebase.
+| Tool | Purpose | Parameters |
+|---|---|---|
+| `get_js_wiki` | Compact overview of a JS/TS project: modules, components, exports, imports, dependencies, framework patterns (Vue SFC, Nuxt, React). Returns Markdown. | `workspace`; `focusArea` (default none) — subdirectory, e.g. `src/components`; `includePatterns` (default `true`); `includeMetrics` (default `false`) |
+| `js_get_file` | Full analysis of a single JS/TS/Vue file: functions, classes, imports, exports, interfaces, or Vue SFC blocks. | `workspace`; `filePath` |
+| `js_find_function` | Find functions by name (substring or glob), including inside Vue SFC script blocks. | `workspace`; `functionName`; `maxResults` (default 100, 0 = unlimited) |
+| `js_find_class` | Find classes by name (substring or glob). | `workspace`; `className`; `maxResults` (default 100, 0 = unlimited) |
+| `js_search` | Search across function names, class names, exports, and import paths. | `workspace`; `query`; `maxResults` (default 100, 0 = unlimited) |
+
+---
+
+## Python Tools
+
+Source: `src/CodeIntelligenceMcp/Tools/PythonTools.cs`. Require a `python` workspace
+(name from `mcp-config.json`, or an absolute path to the project root).
+
+| Tool | Purpose | Parameters |
+|---|---|---|
+| `get_python_wiki` | Compact overview of a Python project: modules, classes, functions, imports, dependencies, framework patterns (async, Pydantic, FastAPI). Returns Markdown. | `workspace`; `focusArea` (default none) — subdirectory or module prefix, e.g. `src/api`; `includePatterns` (default `true`); `includeMetrics` (default `false`) |
+| `py_get_file` | Full analysis of a single Python file: functions, classes, imports, exports. | `workspace`; `filePath` |
+| `py_find_function` | Find functions and methods by name (substring or glob). | `workspace`; `functionName`; `maxResults` (default 100, 0 = unlimited) |
+| `py_find_class` | Find classes by name (substring or glob). | `workspace`; `className`; `maxResults` (default 100, 0 = unlimited) |
+| `py_search` | Search across function names, class names, and import paths. | `workspace`; `query`; `maxResults` (default 100, 0 = unlimited) |
 
 ---
 
 ## PowerShell Tools
 
-### `get_powershell_wiki`
+Source: `src/CodeIntelligenceMcp/Tools/PowerShellTools.cs`. Require a `powershell`
+workspace (name from `mcp-config.json`, or an absolute path to the project root).
 
-**Purpose**: Overview of a PowerShell workspace: scripts, functions, modules, patterns.
-
----
-
-### `ps_get_file`
-
-**Purpose**: Full analysis of one PowerShell script: functions, imports, variables, cmdlet usage.
-
----
-
-### `ps_find_function`
-
-**Purpose**: Find functions by name across all scripts.
+| Tool | Purpose | Parameters |
+|---|---|---|
+| `get_powershell_wiki` | Compact overview of a PowerShell project: script structure, functions, module manifests, dependencies, patterns. Returns Markdown. | `workspace`; `focusArea` (default none) — subdirectory, e.g. `Deploy`; `includePatterns` (default `true`); `includeMetrics` (default `false`) |
+| `ps_get_file` | Full analysis of a single script or module file: functions, imports, variables, cmdlet usage. | `workspace`; `filePath` |
+| `ps_find_function` | Find functions by name (substring or glob) across all scripts. | `workspace`; `functionName`; `maxResults` (default 100, 0 = unlimited) |
+| `ps_get_modules` | All module manifests (`.psd1`) with exported functions and dependencies. | `workspace` |
+| `ps_search` | Search across function names, parameter names, and variables. | `workspace`; `query`; `maxResults` (default 100, 0 = unlimited) |
 
 ---
 
-### `ps_get_modules`
+## Workspace Management
 
-**Purpose**: All module manifests (.psd1) with exported functions and dependencies.
+Source: `src/CodeIntelligenceMcp/Tools/WorkspaceManagementTool.cs`. No workspace-type
+restriction — these operate across all configured workspaces.
+
+| Tool | Purpose | Parameters |
+|---|---|---|
+| `list_workspaces` | List all configured workspaces with type, path, and whether each is currently indexed (loaded). | none |
+| `refresh_workspace` | Invalidate the in-memory index for a workspace so the next tool call re-indexes from scratch. Use after large file changes or branch switches. | `workspace` — name from `mcp-config.json`, or absolute path |
 
 ---
 
-### `ps_search`
+## Tool Use Priority
 
-**Purpose**: Substring search across function names, parameters, and variables.
+Start every session on a known .NET codebase with:
+
+1. `get_codebase_wiki` — project structure, patterns, health summary.
+2. `analyze_changes` — if working on a feature branch, understand what changed vs the base branch.
+3. Drill down with the specific lookup/search tools above.
+
+Prefer these tools over reading files directly whenever the workspace is indexed.

@@ -1,6 +1,6 @@
 # Taak 18 — Fixture-solution + end-to-end integratietests
 
-**Status:** open. **Plansectie:** "Task 18" (bevat volledige testcode).
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 18" (bevat volledige testcode).
 **Audit-bevinding:** Q2 — geen fixture-.sln in de repo; de hele
 MSBuildWorkspace-laadroute en de tools worden alleen handmatig tegen
 privé-workspaces getest. Elke refactor is blind.

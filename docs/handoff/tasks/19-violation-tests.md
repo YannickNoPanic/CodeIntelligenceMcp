@@ -1,6 +1,6 @@
 # Taak 19 — ViolationDetector-ruledekking
 
-**Status:** open. **Plansectie:** "Task 19". **Audit-bevinding:** Q1 — de 21
+**Status:** AFGEROND (zie STATE.md). **Plansectie:** "Task 19". **Audit-bevinding:** Q1 — de 21
 violation-rules (het paradepaardje) hebben nul tests; TASK.md's eigen
 Definition of Done werd nooit gehaald.
 
