@@ -32,12 +32,30 @@ Testsuite bij handoff: **133/133 groen**.
 
 Controleer met `git log --oneline main..feature/audit-fixes`.
 
+## Review-ronde (na taak 21)
+
+Een onafhankelijke C#-review van de volledige branch-diff vond 3 bevestigde
+fouten + 2 waarschijnlijke; alle 5 gefixt (zie de laatste twee fix-commits):
+
+1. Invalidate/IsLoaded gebruikten een andere cache key dan GetAsync voor
+   absolute paden — refresh_workspace en de analyze_changes-autorefresh
+   misten dan stil de name-cached index. Opgelost met één gedeelde
+   `Resolve`-helper.
+2. Invalidate disposede de geëvicteerde index terwijl parallelle callers hem
+   nog gebruikten (use-after-dispose op MSBuildWorkspace). Eager dispose is
+   verwijderd; GC ruimt op zodra de laatste caller klaar is.
+3. ChangeAnalyzer's StartsWith-padcheck zonder directory-grens: `src/Foo`
+   slokte `src/FooBar`-wijzigingen op. Boundary-safe check toegevoegd.
+4. Zelfde patroon in WikiGenerator.ResolveProject — gefixt.
+5. `_allComplexity`-Lazy cachede een fault permanent — retry buiten de cache.
+
 ## Open
 
-Alle 21 taken zijn afgerond (eindstand: 180/180 tests groen). Resterend en
-bewust bij de gebruiker gelaten: licentie/LICENSE, toolnaam, dotnet-tool-
-packaging, CI-pipeline, en het opruimen/scrubben van interne historie-docs
-(TASK.md, ARCHITECTURE.md, PLAN*.md bevatten nog privé-paden).
+Alle 21 taken plus de review-fixes zijn afgerond (eindstand: 180/180 tests
+groen). Resterend en bewust bij de gebruiker gelaten: licentie/LICENSE,
+toolnaam, dotnet-tool-packaging, CI-pipeline, en het opruimen/scrubben van
+interne historie-docs (TASK.md, ARCHITECTURE.md, PLAN*.md bevatten nog
+privé-paden).
 
 ## Belangrijke afwijkingen t.o.v. het originele plan
 
