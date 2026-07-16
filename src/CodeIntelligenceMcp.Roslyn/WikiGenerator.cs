@@ -286,9 +286,10 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
 
         foreach ((string name, string dir) in projectDirs)
         {
-            string normalizedDir = dir.Replace('\\', '/');
+            string normalizedDir = dir.Replace('\\', '/').TrimEnd('/');
 
-            if (normalizedFile.StartsWith(normalizedDir, StringComparison.OrdinalIgnoreCase)
+            // Boundary-safe prefix check: "src/Foo" must not claim files under "src/FooBar".
+            if (normalizedFile.StartsWith(normalizedDir + "/", StringComparison.OrdinalIgnoreCase)
                 && normalizedDir.Length > bestDir.Length)
             {
                 bestDir = normalizedDir;

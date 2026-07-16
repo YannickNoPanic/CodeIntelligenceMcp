@@ -111,8 +111,23 @@ public sealed class RoslynWorkspaceIndex : IDisposable
     }
     internal HashSet<string> TestClassNames => _testClassNames.Value;
 
-    internal Task<IReadOnlyList<ProjectMethodComplexity>> GetAllComplexityAsync(CancellationToken ct = default)
-        => _allComplexity.Value.WaitAsync(ct);
+    internal async Task<IReadOnlyList<ProjectMethodComplexity>> GetAllComplexityAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            return await _allComplexity.Value.WaitAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // A transient fault (file read during the one-shot pass) must not poison
+            // complexity for the index lifetime — retry once outside the Lazy cache.
+            return await Task.Run(() => ComplexityAnalyzer.ComputeAllAsync(this, ct), ct);
+        }
+    }
 
     // Creates an index from in-memory compilations for unit testing.
     // GetProjectDocuments, GetRazorDocuments, and FindUsagesAsync are not available in this mode.
