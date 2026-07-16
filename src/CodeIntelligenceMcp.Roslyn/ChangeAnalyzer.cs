@@ -29,7 +29,10 @@ public sealed class ChangeAnalyzer(RoslynWorkspaceIndex index, CleanArchitecture
         List<ChangedFile> workspaceFiles = [.. allChanges.Where(f =>
         {
             string fullPath = Path.GetFullPath(Path.Combine(repoRoot, f.FilePath)).Replace('\\', '/');
-            return fullPath.StartsWith(solutionDir, StringComparison.OrdinalIgnoreCase);
+
+            // Boundary-safe prefix check: "src/Foo" must not swallow files under "src/FooBar".
+            return fullPath.Equals(solutionDir, StringComparison.OrdinalIgnoreCase)
+                || fullPath.StartsWith(solutionDir + "/", StringComparison.OrdinalIgnoreCase);
         })];
 
         HashSet<string> changedFilePaths = [.. workspaceFiles.Select(f =>

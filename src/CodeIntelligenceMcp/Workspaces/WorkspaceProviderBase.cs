@@ -20,10 +20,11 @@ internal abstract class WorkspaceProviderBase<TIndex>(McpConfig config, ILogger 
 
     protected abstract Task<TIndex> LoadAsync(WorkspaceConfig ws, CancellationToken ct);
 
-    public async Task<TIndex?> GetAsync(string workspace, CancellationToken ct = default)
+    // Single source of truth for input -> WorkspaceConfig resolution. GetAsync, IsLoaded,
+    // and Invalidate must all compute the same cache key (ws.Name) for the same input,
+    // otherwise a path-based refresh silently misses a name-cached index.
+    private WorkspaceConfig? Resolve(string workspace)
     {
-        WorkspaceConfig ws;
-
         if (Path.IsPathRooted(workspace))
         {
             string normalizedPath = workspace.Replace('\\', '/');
@@ -35,23 +36,23 @@ internal abstract class WorkspaceProviderBase<TIndex>(McpConfig config, ILogger 
                 && GetConfiguredPath(w) is string p
                 && string.Equals(p.Replace('\\', '/'), normalizedPath, StringComparison.OrdinalIgnoreCase));
 
-            ws = configured ?? CreateAdHoc(normalizedPath);
+            return configured ?? CreateAdHoc(normalizedPath);
         }
-        else
+
+        return config.Workspaces
+            .FirstOrDefault(w => w.Name == workspace && w.Type == workspaceType && GetConfiguredPath(w) is not null);
+    }
+
+    public async Task<TIndex?> GetAsync(string workspace, CancellationToken ct = default)
+    {
+        WorkspaceConfig? ws = Resolve(workspace);
+        if (ws is null)
         {
-            WorkspaceConfig? found = config.Workspaces
-                .FirstOrDefault(w => w.Name == workspace && w.Type == workspaceType);
-
-            if (found is null || GetConfiguredPath(found) is null)
-            {
-                Logger.LogWarning("Workspace '{Workspace}' not found — known {Type} workspaces: {Known}",
-                    workspace,
-                    workspaceType,
-                    string.Join(", ", config.Workspaces.Where(w => w.Type == workspaceType).Select(w => w.Name)));
-                return null;
-            }
-
-            ws = found;
+            Logger.LogWarning("Workspace '{Workspace}' not found — known {Type} workspaces: {Known}",
+                workspace,
+                workspaceType,
+                string.Join(", ", config.Workspaces.Where(w => w.Type == workspaceType).Select(w => w.Name)));
+            return null;
         }
 
         string cacheKey = ws.Name;
@@ -83,41 +84,21 @@ internal abstract class WorkspaceProviderBase<TIndex>(McpConfig config, ILogger 
 
     public bool IsLoaded(string workspace)
     {
-        string cacheKey = Path.IsPathRooted(workspace)
-            ? workspace.Replace('\\', '/')
-            : workspace;
+        string cacheKey = Resolve(workspace)?.Name ?? workspace;
 
         return _loaded.TryGetValue(cacheKey, out Lazy<Task<TIndex>>? lazy)
             && lazy.IsValueCreated
             && lazy.Value.IsCompletedSuccessfully;
     }
 
+    // Deliberately no eager Dispose of the evicted index: other callers may still be awaiting
+    // or using the shared instance (a disposed MSBuildWorkspace corrupts their in-flight
+    // queries). The evicted index is unreferenced once those callers finish and is collected;
+    // one retained workspace per refresh is far cheaper than a use-after-dispose race.
     public bool Invalidate(string workspace)
     {
-        string cacheKey = Path.IsPathRooted(workspace)
-            ? workspace.Replace('\\', '/')
-            : workspace;
+        string cacheKey = Resolve(workspace)?.Name ?? workspace;
 
-        if (!_loaded.TryRemove(cacheKey, out Lazy<Task<TIndex>>? removed))
-            return false;
-
-        DisposeWhenComplete(removed);
-        return true;
-    }
-
-    private static void DisposeWhenComplete(Lazy<Task<TIndex>> removed)
-    {
-        if (!removed.IsValueCreated)
-            return;
-
-        removed.Value.ContinueWith(
-            t =>
-            {
-                if (t.IsCompletedSuccessfully && t.Result is IDisposable disposable)
-                    disposable.Dispose();
-            },
-            CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
+        return _loaded.TryRemove(cacheKey, out _);
     }
 }
