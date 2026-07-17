@@ -1,4 +1,3 @@
-using CodeIntelligenceMcp.Config;
 using CodeIntelligenceMcp.Tools;
 
 namespace CodeIntelligenceMcp.Workspaces;
@@ -9,7 +8,7 @@ internal static class WorkspaceAccess
 {
     public static async Task<(TIndex? Index, string? Error)> GetAsync<TIndex>(
         IWorkspaceProvider<TIndex> provider,
-        McpConfig config,
+        WorkspaceCatalog catalog,
         string workspaceType,
         string workspace,
         CancellationToken ct)
@@ -21,9 +20,7 @@ internal static class WorkspaceAccess
             if (index is not null)
                 return (index, null);
 
-            string known = string.Join(", ", config.Workspaces
-                .Where(w => w.Type == workspaceType)
-                .Select(w => w.Name));
+            string known = string.Join(", ", catalog.KnownNames(workspaceType));
 
             string hint = known.Length > 0
                 ? $"known {workspaceType} workspaces: {known} — or pass an absolute path"

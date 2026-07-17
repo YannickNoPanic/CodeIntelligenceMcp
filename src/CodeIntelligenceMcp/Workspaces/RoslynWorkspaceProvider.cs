@@ -3,8 +3,8 @@ using CodeIntelligenceMcp.Config;
 
 namespace CodeIntelligenceMcp.Workspaces;
 
-internal sealed class RoslynWorkspaceProvider(McpConfig config, ILogger<RoslynWorkspaceProvider> logger)
-    : WorkspaceProviderBase<RoslynWorkspaceIndex>(config, logger, "dotnet")
+internal sealed class RoslynWorkspaceProvider(WorkspaceCatalog catalog, ILogger<RoslynWorkspaceProvider> logger)
+    : WorkspaceProviderBase<RoslynWorkspaceIndex>(catalog, logger, "dotnet")
 {
     protected override string? GetConfiguredPath(WorkspaceConfig ws) => ws.Solution;
 

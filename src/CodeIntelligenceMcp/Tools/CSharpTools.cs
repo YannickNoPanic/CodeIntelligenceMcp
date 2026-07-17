@@ -5,7 +5,7 @@ public sealed class CSharpTools(
     IWorkspaceProvider<RoslynWorkspaceIndex> roslynProvider,
     CleanArchRegistry cleanArch,
     SolutionPathRegistry solutionPaths,
-    McpConfig config)
+    WorkspaceCatalog catalog)
 {
     private CleanArchitectureNames ResolveCleanArch(string workspace, RoslynWorkspaceIndex index)
     {
@@ -35,7 +35,7 @@ public sealed class CSharpTools(
         [Description("Simple or fully qualified type name")] string typeName,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -61,7 +61,7 @@ public sealed class CSharpTools(
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -77,7 +77,7 @@ public sealed class CSharpTools(
         [Description("Method name")] string methodName,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -99,7 +99,7 @@ public sealed class CSharpTools(
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -115,7 +115,7 @@ public sealed class CSharpTools(
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -131,7 +131,7 @@ public sealed class CSharpTools(
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -149,7 +149,7 @@ public sealed class CSharpTools(
         [Description("Type name")] string typeName,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -170,7 +170,7 @@ public sealed class CSharpTools(
         [Description("Namespace to inspect (exact or prefix)")] string @namespace,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -184,7 +184,7 @@ public sealed class CSharpTools(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx/.slnf for ad-hoc worktrees")] string workspace,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -200,7 +200,7 @@ public sealed class CSharpTools(
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -214,7 +214,7 @@ public sealed class CSharpTools(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx/.slnf for ad-hoc worktrees")] string workspace,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -230,7 +230,7 @@ public sealed class CSharpTools(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx/.slnf for ad-hoc worktrees")] string workspace,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -248,7 +248,7 @@ public sealed class CSharpTools(
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -264,7 +264,7 @@ public sealed class CSharpTools(
         [Description("Maximum violations to include per rule (default 50, 0 = unlimited)")] int maxPerRule = 50,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -310,7 +310,7 @@ public sealed class CSharpTools(
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -328,7 +328,7 @@ public sealed class CSharpTools(
         [Description("Transitive depth: 1 = direct callers only (default), up to 3 = callers-of-callers")] int depth = 1,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -349,7 +349,7 @@ public sealed class CSharpTools(
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -365,7 +365,7 @@ public sealed class CSharpTools(
         [Description("Filter to a specific project name (substring match)")] string? projectFilter = null,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -378,7 +378,7 @@ public sealed class CSharpTools(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx/.slnf for ad-hoc worktrees")] string workspace,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -393,7 +393,7 @@ public sealed class CSharpTools(
         [Description("Type name to assess")] string typeName,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -416,7 +416,7 @@ public sealed class CSharpTools(
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -449,7 +449,7 @@ public sealed class CSharpTools(
         [Description("File path (relative to solution root or absolute)")] string filePath,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 

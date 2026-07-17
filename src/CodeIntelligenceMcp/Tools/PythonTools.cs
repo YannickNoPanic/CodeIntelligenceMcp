@@ -1,7 +1,7 @@
 namespace CodeIntelligenceMcp.Tools;
 
 [McpServerToolType]
-public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider, McpConfig config)
+public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider, WorkspaceCatalog catalog)
 {
     [McpServerTool(Name = "get_python_wiki")]
     [Description("Generate a compact overview of a Python project: modules, classes, functions, imports, dependencies, and framework patterns.")]
@@ -12,7 +12,7 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider, 
         [Description("Include metrics (file counts, class/function counts)")] bool includeMetrics = false,
         CancellationToken ct = default)
     {
-        (PythonIndex? index, string? error) = await WorkspaceAccess.GetAsync(pythonProvider, config, "python", workspace, ct);
+        (PythonIndex? index, string? error) = await WorkspaceAccess.GetAsync(pythonProvider, catalog, "python", workspace, ct);
         if (index is null)
             return error!;
 
@@ -27,7 +27,7 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider, 
         [Description("File path (absolute or relative to workspace root)")] string filePath,
         CancellationToken ct = default)
     {
-        (PythonIndex? index, string? error) = await WorkspaceAccess.GetAsync(pythonProvider, config, "python", workspace, ct);
+        (PythonIndex? index, string? error) = await WorkspaceAccess.GetAsync(pythonProvider, catalog, "python", workspace, ct);
         if (index is null)
             return error!;
 
@@ -46,7 +46,7 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider, 
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (PythonIndex? index, string? error) = await WorkspaceAccess.GetAsync(pythonProvider, config, "python", workspace, ct);
+        (PythonIndex? index, string? error) = await WorkspaceAccess.GetAsync(pythonProvider, catalog, "python", workspace, ct);
         if (index is null)
             return error!;
 
@@ -81,7 +81,7 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider, 
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (PythonIndex? index, string? error) = await WorkspaceAccess.GetAsync(pythonProvider, config, "python", workspace, ct);
+        (PythonIndex? index, string? error) = await WorkspaceAccess.GetAsync(pythonProvider, catalog, "python", workspace, ct);
         if (index is null)
             return error!;
 
@@ -109,7 +109,7 @@ public sealed class PythonTools(IWorkspaceProvider<PythonIndex> pythonProvider, 
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (PythonIndex? index, string? error) = await WorkspaceAccess.GetAsync(pythonProvider, config, "python", workspace, ct);
+        (PythonIndex? index, string? error) = await WorkspaceAccess.GetAsync(pythonProvider, catalog, "python", workspace, ct);
         if (index is null)
             return error!;
 

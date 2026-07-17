@@ -1,6 +1,7 @@
 using CodeIntelligenceMcp.Config;
 using CodeIntelligenceMcp.Logging;
 using CodeIntelligenceMcp.Tools;
+using CodeIntelligenceMcp.Workspaces;
 
 string logPath = Path.Combine(Path.GetTempPath(), "CodeIntelligenceMcp.log");
 
@@ -64,27 +65,28 @@ try
     void RegisterServices(IServiceCollection services)
     {
         services.AddSingleton(config);
+        services.AddSingleton<WorkspaceCatalog>();
         services.AddSingleton(new CleanArchRegistry(cleanArchConfig));
         services.AddSingleton(new SolutionPathRegistry(solutionPaths));
         services.AddSingleton<IWorkspaceProvider<RoslynWorkspaceIndex>, RoslynWorkspaceProvider>();
         services.AddSingleton<IWorkspaceProvider<AspIndex>>(sp =>
             new FileWalkWorkspaceProvider<AspIndex>(
-                config,
+                sp.GetRequiredService<WorkspaceCatalog>(),
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger("AspWorkspace"),
                 "asp-classic", AspIndex.Build, i => i.FileCount));
         services.AddSingleton<IWorkspaceProvider<PowerShellIndex>>(sp =>
             new FileWalkWorkspaceProvider<PowerShellIndex>(
-                config,
+                sp.GetRequiredService<WorkspaceCatalog>(),
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger("PowerShellWorkspace"),
                 "powershell", PowerShellIndex.Build, i => i.FileCount));
         services.AddSingleton<IWorkspaceProvider<PythonIndex>>(sp =>
             new FileWalkWorkspaceProvider<PythonIndex>(
-                config,
+                sp.GetRequiredService<WorkspaceCatalog>(),
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger("PythonWorkspace"),
                 "python", PythonIndex.Build, i => i.FileCount));
         services.AddSingleton<IWorkspaceProvider<JsIndex>>(sp =>
             new FileWalkWorkspaceProvider<JsIndex>(
-                config,
+                sp.GetRequiredService<WorkspaceCatalog>(),
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger("JsWorkspace"),
                 "javascript", JsIndex.Build, i => i.FileCount));
     }

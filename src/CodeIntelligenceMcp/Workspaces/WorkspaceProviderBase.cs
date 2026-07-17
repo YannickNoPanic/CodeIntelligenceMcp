@@ -3,12 +3,12 @@ using CodeIntelligenceMcp.Config;
 
 namespace CodeIntelligenceMcp.Workspaces;
 
-internal abstract class WorkspaceProviderBase<TIndex>(McpConfig config, ILogger logger, string workspaceType)
+internal abstract class WorkspaceProviderBase<TIndex>(WorkspaceCatalog catalog, ILogger logger, string workspaceType)
     : IWorkspaceProvider<TIndex>
     where TIndex : class
 {
-    // OrdinalIgnoreCase: keys are workspace names or Windows paths — "C:/Git/X.sln" and
-    // "c:/git/x.sln" must not trigger two full index builds.
+    // OrdinalIgnoreCase: keys are workspace names or Windows paths, so casing differences
+    // must not trigger two full index builds.
     private readonly ConcurrentDictionary<string, Lazy<Task<TIndex>>> _loaded =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -20,27 +20,9 @@ internal abstract class WorkspaceProviderBase<TIndex>(McpConfig config, ILogger 
 
     protected abstract Task<TIndex> LoadAsync(WorkspaceConfig ws, CancellationToken ct);
 
-    // Single source of truth for input -> WorkspaceConfig resolution. GetAsync, IsLoaded,
-    // and Invalidate must all compute the same cache key (ws.Name) for the same input,
-    // otherwise a path-based refresh silently misses a name-cached index.
     private WorkspaceConfig? Resolve(string workspace)
     {
-        if (Path.IsPathRooted(workspace))
-        {
-            string normalizedPath = workspace.Replace('\\', '/');
-
-            // An absolute path to a configured workspace reuses that workspace's config and
-            // cache key — otherwise name-based and path-based calls build two full indexes.
-            WorkspaceConfig? configured = config.Workspaces.FirstOrDefault(w =>
-                w.Type == workspaceType
-                && GetConfiguredPath(w) is string p
-                && string.Equals(p.Replace('\\', '/'), normalizedPath, StringComparison.OrdinalIgnoreCase));
-
-            return configured ?? CreateAdHoc(normalizedPath);
-        }
-
-        return config.Workspaces
-            .FirstOrDefault(w => w.Name == workspace && w.Type == workspaceType && GetConfiguredPath(w) is not null);
+        return catalog.Resolve(workspaceType, workspace, GetConfiguredPath, CreateAdHoc);
     }
 
     public async Task<TIndex?> GetAsync(string workspace, CancellationToken ct = default)
@@ -48,10 +30,10 @@ internal abstract class WorkspaceProviderBase<TIndex>(McpConfig config, ILogger 
         WorkspaceConfig? ws = Resolve(workspace);
         if (ws is null)
         {
-            Logger.LogWarning("Workspace '{Workspace}' not found — known {Type} workspaces: {Known}",
+            Logger.LogWarning("Workspace '{Workspace}' not found - known {Type} workspaces: {Known}",
                 workspace,
                 workspaceType,
-                string.Join(", ", config.Workspaces.Where(w => w.Type == workspaceType).Select(w => w.Name)));
+                string.Join(", ", catalog.KnownNames(workspaceType)));
             return null;
         }
 
@@ -91,10 +73,6 @@ internal abstract class WorkspaceProviderBase<TIndex>(McpConfig config, ILogger 
             && lazy.Value.IsCompletedSuccessfully;
     }
 
-    // Deliberately no eager Dispose of the evicted index: other callers may still be awaiting
-    // or using the shared instance (a disposed MSBuildWorkspace corrupts their in-flight
-    // queries). The evicted index is unreferenced once those callers finish and is collected;
-    // one retained workspace per refresh is far cheaper than a use-after-dispose race.
     public bool Invalidate(string workspace)
     {
         string cacheKey = Resolve(workspace)?.Name ?? workspace;

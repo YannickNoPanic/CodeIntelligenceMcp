@@ -22,17 +22,17 @@ public sealed class WorkspaceAccessTests
         public bool IsLoaded(string workspace) => false;
     }
 
-    private static McpConfig ConfigWith(params (string Name, string Type)[] workspaces) => new()
+    private static WorkspaceCatalog CatalogWith(params (string Name, string Type)[] workspaces) => new(new McpConfig
     {
         Workspaces = [.. workspaces.Select(w => new WorkspaceConfig { Name = w.Name, Type = w.Type })]
-    };
+    });
 
     [Fact]
     public async Task GetAsync_UnknownWorkspace_ErrorListsKnownNames()
     {
-        McpConfig config = ConfigWith(("alpha", "dotnet"), ("beta", "dotnet"), ("legacy", "asp-classic"));
+        WorkspaceCatalog catalog = CatalogWith(("alpha", "dotnet"), ("beta", "dotnet"), ("legacy", "asp-classic"));
 
-        (object? index, string? error) = await WorkspaceAccess.GetAsync(new NullProvider(), config, "dotnet", "gamma", CancellationToken.None);
+        (object? index, string? error) = await WorkspaceAccess.GetAsync(new NullProvider(), catalog, "dotnet", "gamma", CancellationToken.None);
 
         index.Should().BeNull();
         error.Should().Contain("gamma").And.Contain("alpha").And.Contain("beta").And.NotContain("legacy");
@@ -43,7 +43,7 @@ public sealed class WorkspaceAccessTests
     {
         var ex = new WorkspaceLoadException("solution failed to load", "install the .NET SDK", ["diag1"]);
 
-        (object? index, string? error) = await WorkspaceAccess.GetAsync(new ThrowingProvider(ex), ConfigWith(), "dotnet", "C:/x/y.sln", CancellationToken.None);
+        (object? index, string? error) = await WorkspaceAccess.GetAsync(new ThrowingProvider(ex), CatalogWith(), "dotnet", "C:/x/y.sln", CancellationToken.None);
 
         index.Should().BeNull();
         error.Should().Contain("solution failed to load").And.Contain("install the .NET SDK").And.Contain("diag1");
@@ -54,7 +54,7 @@ public sealed class WorkspaceAccessTests
     {
         var ex = new InvalidOperationException("boom");
 
-        (object? index, string? error) = await WorkspaceAccess.GetAsync(new ThrowingProvider(ex), ConfigWith(), "dotnet", "ws", CancellationToken.None);
+        (object? index, string? error) = await WorkspaceAccess.GetAsync(new ThrowingProvider(ex), CatalogWith(), "dotnet", "ws", CancellationToken.None);
 
         index.Should().BeNull();
         error.Should().Contain("boom").And.NotContain("   at ");
@@ -65,7 +65,7 @@ public sealed class WorkspaceAccessTests
     {
         var ex = new OperationCanceledException();
 
-        Func<Task> act = () => WorkspaceAccess.GetAsync(new ThrowingProvider(ex), ConfigWith(), "dotnet", "ws", CancellationToken.None);
+        Func<Task> act = () => WorkspaceAccess.GetAsync(new ThrowingProvider(ex), CatalogWith(), "dotnet", "ws", CancellationToken.None);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
     }

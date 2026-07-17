@@ -7,18 +7,18 @@ public sealed class WorkspaceManagementTool(
     IWorkspaceProvider<PowerShellIndex> ps,
     IWorkspaceProvider<PythonIndex> py,
     IWorkspaceProvider<JsIndex> js,
-    McpConfig config)
+    WorkspaceCatalog catalog)
 {
     [McpServerTool(Name = "list_workspaces")]
     [Description("List all configured workspaces with type, path, and whether they are already indexed. Absolute .sln/.slnx paths also work ad hoc on any dotnet tool.")]
     public string ListWorkspaces()
     {
-        var workspaces = config.Workspaces.Select(w => new
+        var workspaces = catalog.List().Select(e => new
         {
-            name = w.Name,
-            type = w.Type,
-            path = w.Solution ?? w.RootPath,
-            loaded = IsLoadedFor(w)
+            name = e.Workspace.Name,
+            type = e.Workspace.Type,
+            path = e.Path,
+            loaded = IsLoadedFor(e.Workspace)
         }).ToList();
 
         return ToolResponses.Ok(new { workspaces });

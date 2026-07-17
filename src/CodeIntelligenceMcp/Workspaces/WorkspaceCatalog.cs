@@ -3,7 +3,7 @@ using CodeIntelligenceMcp.Config;
 
 namespace CodeIntelligenceMcp.Workspaces;
 
-internal sealed class WorkspaceCatalog(McpConfig config)
+public sealed class WorkspaceCatalog(McpConfig config)
 {
     private static readonly HashSet<string> KnownTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -39,7 +39,7 @@ internal sealed class WorkspaceCatalog(McpConfig config)
             string normalizedPath = NormalizePath(workspace);
             WorkspaceConfig? configured = All()
                 .FirstOrDefault(w =>
-                    w.Type == workspaceType
+                    string.Equals(w.Type, workspaceType, StringComparison.OrdinalIgnoreCase)
                     && getPath(w) is string p
                     && string.Equals(NormalizePath(p), normalizedPath, StringComparison.OrdinalIgnoreCase));
 
@@ -49,7 +49,7 @@ internal sealed class WorkspaceCatalog(McpConfig config)
         return All()
             .FirstOrDefault(w =>
                 w.Name == workspace
-                && w.Type == workspaceType
+                && string.Equals(w.Type, workspaceType, StringComparison.OrdinalIgnoreCase)
                 && getPath(w) is not null);
     }
 
@@ -67,18 +67,20 @@ internal sealed class WorkspaceCatalog(McpConfig config)
         if (validationError is not null)
             return RegistrationResult.Fail(validationError);
 
-        WorkspaceConfig workspace = normalizedType.Equals("dotnet", StringComparison.OrdinalIgnoreCase)
+        string canonicalType = normalizedType.ToLowerInvariant();
+
+        WorkspaceConfig workspace = canonicalType.Equals("dotnet", StringComparison.OrdinalIgnoreCase)
             ? new WorkspaceConfig
             {
                 Name = normalizedName,
-                Type = "dotnet",
+                Type = canonicalType,
                 Solution = normalizedPath,
                 CleanArchitecture = cleanArchitecture
             }
             : new WorkspaceConfig
             {
                 Name = normalizedName,
-                Type = normalizedType,
+                Type = canonicalType,
                 RootPath = normalizedPath
             };
 
@@ -96,7 +98,7 @@ internal sealed class WorkspaceCatalog(McpConfig config)
 
     public IReadOnlyList<string> KnownNames(string workspaceType) =>
         [.. All()
-            .Where(w => w.Type == workspaceType)
+            .Where(w => string.Equals(w.Type, workspaceType, StringComparison.OrdinalIgnoreCase))
             .Select(w => w.Name)
             .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)];
 
@@ -137,9 +139,9 @@ internal sealed class WorkspaceCatalog(McpConfig config)
     private static string NormalizePath(string path) => Path.GetFullPath(path).Replace('\\', '/');
 }
 
-internal sealed record WorkspaceCatalogEntry(WorkspaceConfig Workspace, string Source, string? Path);
+public sealed record WorkspaceCatalogEntry(WorkspaceConfig Workspace, string Source, string? Path);
 
-internal sealed record RegistrationResult(bool Success, WorkspaceConfig? Workspace, string? Error)
+public sealed record RegistrationResult(bool Success, WorkspaceConfig? Workspace, string? Error)
 {
     public static RegistrationResult Ok(WorkspaceConfig workspace) => new(true, workspace, null);
     public static RegistrationResult Fail(string error) => new(false, null, error);

@@ -1,7 +1,7 @@
 namespace CodeIntelligenceMcp.Tools;
 
 [McpServerToolType]
-public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider, McpConfig config)
+public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider, WorkspaceCatalog catalog)
 {
     [McpServerTool(Name = "get_js_wiki")]
     [Description("Generate a compact overview of a JavaScript/TypeScript project: modules, components, exports, imports, dependencies, and framework patterns.")]
@@ -12,7 +12,7 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider, McpConfig co
         [Description("Include metrics (file counts, function/class/interface counts)")] bool includeMetrics = false,
         CancellationToken ct = default)
     {
-        (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, config, "javascript", workspace, ct);
+        (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, catalog, "javascript", workspace, ct);
         if (index is null)
             return error!;
 
@@ -27,7 +27,7 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider, McpConfig co
         [Description("File path (absolute or relative to workspace root)")] string filePath,
         CancellationToken ct = default)
     {
-        (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, config, "javascript", workspace, ct);
+        (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, catalog, "javascript", workspace, ct);
         if (index is null)
             return error!;
 
@@ -54,7 +54,7 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider, McpConfig co
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, config, "javascript", workspace, ct);
+        (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, catalog, "javascript", workspace, ct);
         if (index is null)
             return error!;
 
@@ -83,7 +83,7 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider, McpConfig co
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, config, "javascript", workspace, ct);
+        (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, catalog, "javascript", workspace, ct);
         if (index is null)
             return error!;
 
@@ -112,7 +112,7 @@ public sealed class JsTools(IWorkspaceProvider<JsIndex> jsProvider, McpConfig co
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, config, "javascript", workspace, ct);
+        (JsIndex? index, string? error) = await WorkspaceAccess.GetAsync(jsProvider, catalog, "javascript", workspace, ct);
         if (index is null)
             return error!;
 

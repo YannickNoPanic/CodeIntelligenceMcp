@@ -1,7 +1,7 @@
 namespace CodeIntelligenceMcp.Tools;
 
 [McpServerToolType]
-public sealed class DiagnosticsTool(IWorkspaceProvider<RoslynWorkspaceIndex> roslynProvider, McpConfig config)
+public sealed class DiagnosticsTool(IWorkspaceProvider<RoslynWorkspaceIndex> roslynProvider, WorkspaceCatalog catalog)
 {
     [McpServerTool(Name = "get_diagnostics")]
     [Description("Get Roslyn compiler diagnostics for a .NET workspace, grouped by diagnostic code. Use after a refactor to check for new warnings, or as a cleanup starting point. Start with severity 'warning' and filter to one project to reduce noise. Does not duplicate architectural rules from find_violations — covers CS/IDE/CA compiler output only.")]
@@ -12,7 +12,7 @@ public sealed class DiagnosticsTool(IWorkspaceProvider<RoslynWorkspaceIndex> ros
         [Description("Filter by diagnostic code prefix: 'CS', 'IDE', 'CA', 'SA'")] string? category = null,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 

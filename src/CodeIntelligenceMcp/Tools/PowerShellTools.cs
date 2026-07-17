@@ -1,7 +1,7 @@
 namespace CodeIntelligenceMcp.Tools;
 
 [McpServerToolType]
-public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvider, McpConfig config)
+public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvider, WorkspaceCatalog catalog)
 {
     [McpServerTool(Name = "get_powershell_wiki")]
     [Description("Generate a compact overview of a PowerShell project: script structure, functions, module manifests, dependencies, and patterns.")]
@@ -12,7 +12,7 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
         [Description("Include metrics (script counts, function counts)")] bool includeMetrics = false,
         CancellationToken ct = default)
     {
-        (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, config, "powershell", workspace, ct);
+        (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, catalog, "powershell", workspace, ct);
         if (index is null)
             return error!;
 
@@ -27,7 +27,7 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
         [Description("File path (absolute or relative to workspace root)")] string filePath,
         CancellationToken ct = default)
     {
-        (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, config, "powershell", workspace, ct);
+        (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, catalog, "powershell", workspace, ct);
         if (index is null)
             return error!;
 
@@ -46,7 +46,7 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, config, "powershell", workspace, ct);
+        (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, catalog, "powershell", workspace, ct);
         if (index is null)
             return error!;
 
@@ -81,7 +81,7 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
         [Description("Workspace name from mcp-config.json, or absolute path to a PS root directory for ad-hoc use")] string workspace,
         CancellationToken ct = default)
     {
-        (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, config, "powershell", workspace, ct);
+        (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, catalog, "powershell", workspace, ct);
         if (index is null)
             return error!;
 
@@ -96,7 +96,7 @@ public sealed class PowerShellTools(IWorkspaceProvider<PowerShellIndex> psProvid
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, config, "powershell", workspace, ct);
+        (PowerShellIndex? index, string? error) = await WorkspaceAccess.GetAsync(psProvider, catalog, "powershell", workspace, ct);
         if (index is null)
             return error!;
 

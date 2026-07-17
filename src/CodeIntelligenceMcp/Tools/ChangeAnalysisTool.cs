@@ -5,7 +5,7 @@ public sealed class ChangeAnalysisTool(
     IWorkspaceProvider<RoslynWorkspaceIndex> roslynProvider,
     CleanArchRegistry cleanArch,
     SolutionPathRegistry solutionPaths,
-    McpConfig config)
+    WorkspaceCatalog catalog)
 {
     [McpServerTool(Name = "analyze_changes")]
     [Description("Analyze the git diff between current HEAD and a base branch. Returns changed files with affected types, public API signature changes, architectural violations, and diagnostics scoped to changed code. Use as the first call when reviewing a branch before merge, or after a refactor to check for regressions.")]
@@ -17,7 +17,7 @@ public sealed class ChangeAnalysisTool(
         [Description("Also include uncommitted working-tree changes (staged + unstaged). Use before commit to preview the full impact. Default false.")] bool includeUncommitted = false,
         CancellationToken ct = default)
     {
-        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+        (RoslynWorkspaceIndex? index, string? error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
         if (index is null)
             return error!;
 
@@ -33,7 +33,7 @@ public sealed class ChangeAnalysisTool(
         if (index.IsStale())
         {
             roslynProvider.Invalidate(workspace);
-            (index, error) = await WorkspaceAccess.GetAsync(roslynProvider, config, "dotnet", workspace, ct);
+            (index, error) = await WorkspaceAccess.GetAsync(roslynProvider, catalog, "dotnet", workspace, ct);
             if (index is null)
                 return error!;
         }

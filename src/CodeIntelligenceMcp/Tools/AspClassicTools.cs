@@ -1,7 +1,7 @@
 namespace CodeIntelligenceMcp.Tools;
 
 [McpServerToolType]
-public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider, McpConfig config)
+public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider, WorkspaceCatalog catalog)
 {
     [McpServerTool(Name = "asp_get_file")]
     [Description("Get the full structure of a Classic ASP file: includes, subs, functions, variables, and VBScript blocks. Use instead of reading the file directly.")]
@@ -10,7 +10,7 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider, Mc
         [Description("File path")] string filePath,
         CancellationToken ct = default)
     {
-        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, config, "asp-classic", workspace, ct);
+        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, catalog, "asp-classic", workspace, ct);
         if (index is null)
             return error!;
 
@@ -29,7 +29,7 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider, Mc
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, config, "asp-classic", workspace, ct);
+        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, catalog, "asp-classic", workspace, ct);
         if (index is null)
             return error!;
 
@@ -53,7 +53,7 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider, Mc
         [Description("File path")] string filePath,
         CancellationToken ct = default)
     {
-        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, config, "asp-classic", workspace, ct);
+        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, catalog, "asp-classic", workspace, ct);
         if (index is null)
             return error!;
 
@@ -86,7 +86,7 @@ public sealed class AspClassicTools(IWorkspaceProvider<AspIndex> aspProvider, Mc
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
-        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, config, "asp-classic", workspace, ct);
+        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, catalog, "asp-classic", workspace, ct);
         if (index is null)
             return error!;
 

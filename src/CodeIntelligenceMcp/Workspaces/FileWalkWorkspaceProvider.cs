@@ -4,12 +4,12 @@ using CodeIntelligenceMcp.Config;
 namespace CodeIntelligenceMcp.Workspaces;
 
 internal sealed class FileWalkWorkspaceProvider<TIndex>(
-    McpConfig config,
+    WorkspaceCatalog catalog,
     ILogger logger,
     string workspaceType,
     Func<string, Action<string>?, CancellationToken, TIndex> build,
     Func<TIndex, int> fileCount)
-    : WorkspaceProviderBase<TIndex>(config, logger, workspaceType)
+    : WorkspaceProviderBase<TIndex>(catalog, logger, workspaceType)
     where TIndex : class
 {
     private readonly string _workspaceType = workspaceType;

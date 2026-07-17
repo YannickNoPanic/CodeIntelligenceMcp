@@ -1,7 +1,7 @@
 namespace CodeIntelligenceMcp.Tools;
 
 [McpServerToolType]
-public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider, McpConfig config)
+public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider, WorkspaceCatalog catalog)
 {
     [McpServerTool(Name = "sql_find_table")]
     [Description("Find all SQL queries that reference a given table across Classic ASP files. Returns operation type, signature, and columns used.")]
@@ -10,7 +10,7 @@ public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider, McpConfig
         [Description("Table name to search for")] string tableName,
         CancellationToken ct = default)
     {
-        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, config, "asp-classic", workspace, ct);
+        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, catalog, "asp-classic", workspace, ct);
         if (index is null)
             return error!;
 
@@ -35,7 +35,7 @@ public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider, McpConfig
         [Description("File path")] string filePath,
         CancellationToken ct = default)
     {
-        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, config, "asp-classic", workspace, ct);
+        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, catalog, "asp-classic", workspace, ct);
         if (index is null)
             return error!;
 
@@ -50,7 +50,7 @@ public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider, McpConfig
         [Description("Column name to search for")] string columnName,
         CancellationToken ct = default)
     {
-        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, config, "asp-classic", workspace, ct);
+        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, catalog, "asp-classic", workspace, ct);
         if (index is null)
             return error!;
 
@@ -75,7 +75,7 @@ public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider, McpConfig
         [Description("Workspace name (must be an asp-classic workspace)")] string workspace,
         CancellationToken ct = default)
     {
-        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, config, "asp-classic", workspace, ct);
+        (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, catalog, "asp-classic", workspace, ct);
         if (index is null)
             return error!;
 
