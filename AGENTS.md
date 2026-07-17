@@ -6,8 +6,9 @@ A .NET 10 MCP server (stdio transport) that gives Codex structured,
 token-efficient access to two codebases without Codex needing to read files directly.
 
 Workspaces are **lazy-loaded**: the server starts instantly and indexes on the first tool call
-per workspace. Subsequent calls are instant. All tools are **read-only**.
-No write operations, no file watchers, no hot reload.
+per workspace. Subsequent calls reuse the in-memory index. Analysis tools are **read-only**;
+`save_workspace` is the explicit exception and only writes runtime workspace registrations to
+the startup `mcp-config.json`. No file watchers, no hot reload.
 
 ---
 
@@ -23,8 +24,8 @@ dotnet run --project src/CodeIntelligenceMcp --no-launch-profile -c Release --no
 
 ## Reference docs
 
-- **TASK.md** — full tool signatures and output contracts
-- **PLAN.md** — implementation history (all phases complete)
+- **docs/TOOLS.md** — current per-tool reference
+- **TASK.md / PLAN.md** — original build spec and history; may be partially stale
 
 ---
 
@@ -42,24 +43,20 @@ tests/
 
 ---
 
-## Target workspaces
+## Workspace configuration
 
-Defined in `mcp-config.json` (root of repo). Paths are absolute — no variable substitution.
-
-| Name | Type | Path |
-|---|---|---|
-| `datalake2` | `dotnet` | `C:/Git/Datalake2.0/Datalake2.sln` |
-| `datalake1` | `asp-classic` | `C:/Git/WR_Development_datalake_portal` |
-
-Clean Architecture projects for datalake2: `Datalake2.Core`, `Datalake2.Infrastructure`, `Datalake2` (web).
+Workspaces are defined in `mcp-config.json`, which is gitignored because it contains local
+absolute paths. Copy `mcp-config.example.json` to get started. Paths are absolute and no
+environment variable substitution is supported.
 
 ---
 
 ## Key technical decisions
 
 ### Config loading
-`mcp-config.json` uses hardcoded absolute paths — the `${VAR}` substitution described in
-TASK.md is **not needed**. `McpConfigLoader` just deserializes and validates paths exist.
+`mcp-config.json` uses absolute paths — the `${VAR}` substitution described in TASK.md is
+not supported. `McpConfigLoader` deserializes and validates paths for startup; `save_workspace`
+uses a preservation path so temporarily invalid existing config entries are not dropped.
 
 ### VBScript.Parser
 Copied from `vbscript-parser/VBScript.Parser/` into `src/VBScript.Parser/`.

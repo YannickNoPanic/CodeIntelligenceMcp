@@ -7,8 +7,9 @@ token-efficient access to codebases without Claude needing to read files directl
 Supports five workspace types: dotnet (Roslyn), asp-classic, powershell, python, javascript.
 
 Workspaces are **lazy-loaded**: the server starts instantly and indexes on the first tool call
-per workspace. Subsequent calls are instant. All tools are **read-only**.
-No write operations, no file watchers, no hot reload.
+per workspace. Subsequent calls reuse the in-memory index. Analysis tools are **read-only**;
+`save_workspace` is the explicit exception and only writes runtime workspace registrations to
+the startup `mcp-config.json`. No file watchers, no hot reload.
 
 ---
 

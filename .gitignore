@@ -27,6 +27,9 @@ appsettings.json
 appsettings.*.json
 mcp-config.json
 
+# Agent workflow scratch
+.superpowers/
+
 # OS
 .DS_Store
 Thumbs.db
