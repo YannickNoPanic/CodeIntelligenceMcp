@@ -2,7 +2,7 @@ namespace CodeIntelligenceMcp.Config;
 
 internal static class McpConfigLoader
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
     };

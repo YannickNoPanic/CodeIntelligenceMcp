@@ -185,6 +185,36 @@ public sealed class WorkspaceManagementToolTests : IDisposable
     }
 
     [Fact]
+    public void SaveWorkspace_PascalCaseConfig_PreservesExistingEntry()
+    {
+        string configPath = Path.Combine(_dir, "mcp-config.json");
+        File.WriteAllText(configPath, """
+            {
+              "Workspaces": [
+                {
+                  "Name": "existing",
+                  "Type": "powershell",
+                  "RootPath": "C:/existing/scripts"
+                }
+              ]
+            }
+            """);
+        string sln = Path.Combine(_dir, "App.slnx");
+        File.WriteAllText(sln, string.Empty);
+        var catalog = new WorkspaceCatalog(new McpConfig());
+        catalog.Register("current", "dotnet", sln);
+        WorkspaceManagementTool tool = CreateTool(catalog, configSource: new McpConfigSource(configPath));
+
+        string json = tool.SaveWorkspace("current");
+
+        json.Should().Contain("\"saved\":true");
+        string savedJson = File.ReadAllText(configPath);
+        savedJson.Should().Contain("\"name\":\"existing\"");
+        savedJson.Should().Contain("\"rootPath\":\"C:/existing/scripts\"");
+        savedJson.Should().Contain("\"name\":\"current\"");
+    }
+
+    [Fact]
     public void SaveWorkspace_MalformedConfig_ReturnsError()
     {
         string configPath = Path.Combine(_dir, "mcp-config.json");

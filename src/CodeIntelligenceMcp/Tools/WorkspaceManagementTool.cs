@@ -116,7 +116,7 @@ public sealed class WorkspaceManagementTool(
             return new McpConfig();
 
         string json = File.ReadAllText(path);
-        return JsonSerializer.Deserialize<McpConfig>(json, ToolResponses.JsonOptions)
+        return JsonSerializer.Deserialize<McpConfig>(json, McpConfigLoader.JsonOptions)
             ?? throw new JsonException($"mcp-config.json deserialized to null (path: {path})");
     }
 
