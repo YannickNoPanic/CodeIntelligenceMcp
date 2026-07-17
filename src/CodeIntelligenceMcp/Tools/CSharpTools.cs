@@ -4,7 +4,6 @@ namespace CodeIntelligenceMcp.Tools;
 public sealed class CSharpTools(
     IWorkspaceProvider<RoslynWorkspaceIndex> roslynProvider,
     CleanArchRegistry cleanArch,
-    SolutionPathRegistry solutionPaths,
     WorkspaceCatalog catalog)
 {
     private CleanArchitectureNames ResolveCleanArch(string workspace, RoslynWorkspaceIndex index)
@@ -453,7 +452,7 @@ public sealed class CSharpTools(
         if (index is null)
             return error!;
 
-        string solutionPath = solutionPaths.Paths.GetValueOrDefault(workspace, "");
+        string solutionPath = ResolveSolutionPath(workspace);
         string solutionDir = Path.GetDirectoryName(solutionPath) ?? "";
 
         string fullPath = Path.IsPathRooted(filePath)
@@ -466,5 +465,16 @@ public sealed class CSharpTools(
         CleanArchitectureNames ca = ResolveCleanArch(workspace, index);
         FileAnalysis analysis = FileAnalyzer.Analyze(fullPath, ca);
         return ToolResponses.Ok(analysis, index.IsStaleCached());
+    }
+
+    private string ResolveSolutionPath(string workspace)
+    {
+        WorkspaceConfig? resolved = catalog.Resolve(
+            "dotnet",
+            workspace,
+            ws => ws.Solution,
+            path => new WorkspaceConfig { Name = path, Type = "dotnet", Solution = path });
+
+        return resolved?.Solution ?? string.Empty;
     }
 }

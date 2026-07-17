@@ -4,7 +4,6 @@ namespace CodeIntelligenceMcp.Tools;
 public sealed class ChangeAnalysisTool(
     IWorkspaceProvider<RoslynWorkspaceIndex> roslynProvider,
     CleanArchRegistry cleanArch,
-    SolutionPathRegistry solutionPaths,
     WorkspaceCatalog catalog)
 {
     [McpServerTool(Name = "analyze_changes")]
@@ -21,9 +20,7 @@ public sealed class ChangeAnalysisTool(
         if (index is null)
             return error!;
 
-        string solutionPath = Path.IsPathRooted(workspace)
-            ? workspace.Replace('\\', '/')
-            : solutionPaths.Paths.GetValueOrDefault(workspace, string.Empty);
+        string solutionPath = ResolveSolutionPath(workspace);
 
         if (string.IsNullOrEmpty(solutionPath))
             return ToolResponses.Err($"solution path not found for workspace '{workspace}'");
@@ -63,5 +60,16 @@ public sealed class ChangeAnalysisTool(
         {
             return ToolResponses.Err(ex.Message);
         }
+    }
+
+    private string ResolveSolutionPath(string workspace)
+    {
+        WorkspaceConfig? resolved = catalog.Resolve(
+            "dotnet",
+            workspace,
+            ws => ws.Solution,
+            path => new WorkspaceConfig { Name = path, Type = "dotnet", Solution = path });
+
+        return resolved?.Solution ?? string.Empty;
     }
 }

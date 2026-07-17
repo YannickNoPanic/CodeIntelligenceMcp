@@ -58,16 +58,11 @@ try
                     w.CleanArchitecture.WebProject)
                 : new CleanArchitectureNames(string.Empty, string.Empty, string.Empty));
 
-    Dictionary<string, string> solutionPaths = config.Workspaces
-        .Where(w => w.Type == "dotnet" && w.Solution is not null)
-        .ToDictionary(w => w.Name, w => w.Solution!);
-
     void RegisterServices(IServiceCollection services)
     {
         services.AddSingleton(config);
         services.AddSingleton<WorkspaceCatalog>();
         services.AddSingleton(new CleanArchRegistry(cleanArchConfig));
-        services.AddSingleton(new SolutionPathRegistry(solutionPaths));
         services.AddSingleton<IWorkspaceProvider<RoslynWorkspaceIndex>, RoslynWorkspaceProvider>();
         services.AddSingleton<IWorkspaceProvider<AspIndex>>(sp =>
             new FileWalkWorkspaceProvider<AspIndex>(
