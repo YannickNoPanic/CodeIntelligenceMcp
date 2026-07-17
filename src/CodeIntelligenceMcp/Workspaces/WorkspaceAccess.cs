@@ -23,8 +23,8 @@ internal static class WorkspaceAccess
             string known = string.Join(", ", catalog.KnownNames(workspaceType));
 
             string hint = known.Length > 0
-                ? $"known {workspaceType} workspaces: {known} — or pass an absolute path"
-                : $"no {workspaceType} workspaces configured — pass an absolute path or add one to mcp-config.json";
+                ? $"known {workspaceType} workspaces: {known} - or pass an absolute path"
+                : $"no {workspaceType} workspaces configured - pass an absolute path, call register_workspace, or add one to mcp-config.json";
 
             return (null, ToolResponses.Err($"workspace '{workspace}' not found", hint));
         }

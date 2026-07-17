@@ -39,6 +39,17 @@ public sealed class WorkspaceAccessTests
     }
 
     [Fact]
+    public async Task GetAsync_NoConfiguredWorkspaces_ErrorMentionsRegisterWorkspace()
+    {
+        WorkspaceCatalog catalog = CatalogWith();
+
+        (object? index, string? error) = await WorkspaceAccess.GetAsync(new NullProvider(), catalog, "dotnet", "gamma", CancellationToken.None);
+
+        index.Should().BeNull();
+        error.Should().Contain("register_workspace");
+    }
+
+    [Fact]
     public async Task GetAsync_WorkspaceLoadException_SurfacesHintAndDetail()
     {
         var ex = new WorkspaceLoadException("solution failed to load", "install the .NET SDK", ["diag1"]);

@@ -18,10 +18,61 @@ public sealed class WorkspaceManagementTool(
             name = e.Workspace.Name,
             type = e.Workspace.Type,
             path = e.Path,
+            source = e.Source,
             loaded = IsLoadedFor(e.Workspace)
         }).ToList();
 
         return ToolResponses.Ok(new { workspaces });
+    }
+
+    [McpServerTool(Name = "register_workspace")]
+    [Description("Register a workspace for this MCP server process only. Use save_workspace to persist it.")]
+    public string RegisterWorkspace(
+        [Description("Short workspace name, for example 'current'")] string name,
+        [Description("Workspace type: dotnet, asp-classic, powershell, python, or javascript")] string type,
+        [Description("Solution path for dotnet, root directory for file-walk workspace types")] string path,
+        [Description("Optional Clean Architecture core project name for dotnet workspaces")] string? coreProject = null,
+        [Description("Optional Clean Architecture infrastructure project name for dotnet workspaces")] string? infraProject = null,
+        [Description("Optional Clean Architecture web/API project name for dotnet workspaces")] string? webProject = null)
+    {
+        CleanArchitectureConfig? cleanArchitecture =
+            string.IsNullOrWhiteSpace(coreProject)
+            && string.IsNullOrWhiteSpace(infraProject)
+            && string.IsNullOrWhiteSpace(webProject)
+                ? null
+                : new CleanArchitectureConfig
+                {
+                    CoreProject = coreProject ?? string.Empty,
+                    InfraProject = infraProject ?? string.Empty,
+                    WebProject = webProject ?? string.Empty
+                };
+
+        RegistrationResult result = catalog.Register(name, type, path, cleanArchitecture);
+        return result.Success
+            ? ToolResponses.Ok(new
+            {
+                registered = true,
+                name = result.Workspace!.Name,
+                type = result.Workspace.Type,
+                path = result.Workspace.Solution ?? result.Workspace.RootPath,
+                source = "runtime"
+            })
+            : ToolResponses.Err(result.Error!);
+    }
+
+    [McpServerTool(Name = "unregister_workspace")]
+    [Description("Remove a runtime workspace registration from this MCP server process.")]
+    public string UnregisterWorkspace(
+        [Description("Runtime workspace name to remove")] string name)
+    {
+        if (!catalog.IsRuntime(name))
+            return ToolResponses.Err($"workspace '{name}' is not a runtime workspace");
+
+        bool removed = catalog.Unregister(name);
+        bool invalidated = roslyn.Invalidate(name) | asp.Invalidate(name)
+            | ps.Invalidate(name) | py.Invalidate(name) | js.Invalidate(name);
+
+        return ToolResponses.Ok(new { name, unregistered = removed, invalidated });
     }
 
     private bool IsLoadedFor(WorkspaceConfig w) => w.Type switch
