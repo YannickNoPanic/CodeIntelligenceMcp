@@ -107,13 +107,61 @@ public sealed class WorkspaceManagementToolTests : IDisposable
         json.Should().Contain("runtime");
     }
 
+    [Fact]
+    public void SaveWorkspace_RuntimeWorkspace_WritesConfigFile()
+    {
+        string configPath = Path.Combine(_dir, "mcp-config.json");
+        File.WriteAllText(configPath, """
+            {
+              "workspaces": []
+            }
+            """);
+        string sln = Path.Combine(_dir, "App.slnx");
+        File.WriteAllText(sln, string.Empty);
+        var catalog = new WorkspaceCatalog(new McpConfig());
+        catalog.Register("current", "dotnet", sln);
+        WorkspaceManagementTool tool = CreateTool(catalog, configSource: new McpConfigSource(configPath));
+
+        string json = tool.SaveWorkspace("current");
+
+        json.Should().Contain("\"saved\":true");
+        McpConfig saved = McpConfigLoader.Load(configPath);
+        saved.Workspaces.Should().ContainSingle(w => w.Name == "current" && w.Solution == sln.Replace('\\', '/'));
+    }
+
+    [Fact]
+    public void SaveWorkspace_ConfiguredWorkspace_ReturnsError()
+    {
+        string configPath = Path.Combine(_dir, "mcp-config.json");
+        File.WriteAllText(configPath, """
+            {
+              "workspaces": []
+            }
+            """);
+        McpConfig config = new()
+        {
+            Workspaces =
+            [
+                new WorkspaceConfig { Name = "configured", Type = "powershell", RootPath = _dir }
+            ]
+        };
+        var catalog = new WorkspaceCatalog(config);
+        WorkspaceManagementTool tool = CreateTool(catalog, configSource: new McpConfigSource(configPath));
+
+        string json = tool.SaveWorkspace("configured");
+
+        json.Should().Contain("\"error\"");
+        json.Should().Contain("runtime");
+    }
+
     private static WorkspaceManagementTool CreateTool(
         WorkspaceCatalog catalog,
         FakeProvider<RoslynWorkspaceIndex>? roslyn = null,
         FakeProvider<AspIndex>? asp = null,
         FakeProvider<PowerShellIndex>? ps = null,
         FakeProvider<PythonIndex>? py = null,
-        FakeProvider<JsIndex>? js = null)
+        FakeProvider<JsIndex>? js = null,
+        McpConfigSource? configSource = null)
     {
         return new WorkspaceManagementTool(
             roslyn ?? new FakeProvider<RoslynWorkspaceIndex>(),
@@ -121,7 +169,8 @@ public sealed class WorkspaceManagementToolTests : IDisposable
             ps ?? new FakeProvider<PowerShellIndex>(),
             py ?? new FakeProvider<PythonIndex>(),
             js ?? new FakeProvider<JsIndex>(),
-            catalog);
+            catalog,
+            configSource ?? new McpConfigSource(Path.Combine(Path.GetTempPath(), "unused-mcp-config.json")));
     }
 
     private sealed class FakeProvider<TIndex> : IWorkspaceProvider<TIndex>

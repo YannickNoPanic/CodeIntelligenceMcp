@@ -12,6 +12,8 @@ Every tool takes a `workspace` argument. Two forms are accepted:
 
 - **A name from `mcp-config.json`** — e.g. `"myapp"`. Use `list_workspaces` to see what is
   configured, including type and whether it is currently loaded.
+- **A runtime name from `register_workspace`**. Runtime workspaces are available
+  immediately to existing tools and appear in `list_workspaces` with source `runtime`.
 - **An absolute path**, for ad-hoc use against a workspace that isn't pre-configured:
   - C#/.NET tools: an absolute path to a `.sln`, `.slnx`, or `.slnf` file, e.g.
     `C:/path/to/MyApp.sln`.
@@ -234,7 +236,10 @@ restriction — these operate across all configured workspaces.
 
 | Tool | Purpose | Parameters |
 |---|---|---|
-| `list_workspaces` | List all configured workspaces with type, path, and whether each is currently indexed (loaded). | none |
+| `list_workspaces` | List all configured and runtime workspaces with type, path, source, and whether each is currently indexed (loaded). | none |
+| `register_workspace` | Register a workspace for this MCP server process only. Existing tools can use the new short name immediately. | `name`; `type`; `path`; optional `coreProject`, `infraProject`, `webProject` |
+| `unregister_workspace` | Remove a runtime workspace registration and invalidate any cached index for that name. | `name` |
+| `save_workspace` | Persist a runtime workspace to the `mcp-config.json` file used at startup. | `name` |
 | `refresh_workspace` | Invalidate the in-memory index for a workspace so the next tool call re-indexes from scratch. Use after large file changes or branch switches. | `workspace` — name from `mcp-config.json`, or absolute path |
 
 ---

@@ -7,7 +7,8 @@ public sealed class WorkspaceManagementTool(
     IWorkspaceProvider<PowerShellIndex> ps,
     IWorkspaceProvider<PythonIndex> py,
     IWorkspaceProvider<JsIndex> js,
-    WorkspaceCatalog catalog)
+    WorkspaceCatalog catalog,
+    McpConfigSource configSource)
 {
     [McpServerTool(Name = "list_workspaces")]
     [Description("List all configured workspaces with type, path, and whether they are already indexed. Absolute .sln/.slnx paths also work ad hoc on any dotnet tool.")]
@@ -73,6 +74,32 @@ public sealed class WorkspaceManagementTool(
             | ps.Invalidate(name) | py.Invalidate(name) | js.Invalidate(name);
 
         return ToolResponses.Ok(new { name, unregistered = removed, invalidated });
+    }
+
+    [McpServerTool(Name = "save_workspace")]
+    [Description("Persist a runtime workspace to the mcp-config.json file used at startup.")]
+    public string SaveWorkspace(
+        [Description("Runtime workspace name to persist")] string name)
+    {
+        WorkspaceConfig? runtime = catalog.GetRuntime(name);
+        if (runtime is null)
+            return ToolResponses.Err($"workspace '{name}' is not a runtime workspace");
+
+        McpConfig existing = McpConfigLoader.Load(configSource.Path);
+        if (existing.Workspaces.Any(w => string.Equals(w.Name, runtime.Name, StringComparison.OrdinalIgnoreCase)))
+            return ToolResponses.Err($"configured workspace '{runtime.Name}' already exists in '{configSource.Path}'");
+
+        existing.Workspaces.Add(runtime);
+
+        string json = JsonSerializer.Serialize(existing, ToolResponses.JsonOptions);
+        File.WriteAllText(configSource.Path, json + Environment.NewLine);
+
+        return ToolResponses.Ok(new
+        {
+            saved = true,
+            name = runtime.Name,
+            configPath = configSource.Path
+        });
     }
 
     private bool IsLoadedFor(WorkspaceConfig w) => w.Type switch

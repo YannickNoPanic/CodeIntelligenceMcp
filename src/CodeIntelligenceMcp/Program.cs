@@ -61,6 +61,7 @@ try
     void RegisterServices(IServiceCollection services)
     {
         services.AddSingleton(config);
+        services.AddSingleton(new McpConfigSource(configPath));
         services.AddSingleton<WorkspaceCatalog>();
         services.AddSingleton(new CleanArchRegistry(cleanArchConfig));
         services.AddSingleton<IWorkspaceProvider<RoslynWorkspaceIndex>, RoslynWorkspaceProvider>();

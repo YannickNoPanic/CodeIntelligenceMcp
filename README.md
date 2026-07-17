@@ -176,8 +176,29 @@ The default port is `5100`. Override via `appsettings.json`:
 | Tool | Description |
 |---|---|
 | `get_codebase_wiki` | Architecture overview, violations, hotspots — call this first each session |
-| `list_workspaces` | All configured workspaces with type, path, and loaded state |
+| `list_workspaces` | All configured and runtime workspaces with type, path, source, and loaded state |
+| `register_workspace` | Register a workspace for the current MCP process |
+| `unregister_workspace` | Remove a runtime workspace and invalidate cached indexes |
+| `save_workspace` | Persist a runtime workspace to the startup `mcp-config.json` |
 | `refresh_workspace` | Clear cached index and force reload on next tool call |
+
+### Temporary workspace registration
+
+Agents can register a workspace for the current MCP process without editing `mcp-config.json`:
+
+```json
+{
+  "name": "current",
+  "type": "dotnet",
+  "path": "C:/Git/MyApp/MyApp.slnx"
+}
+```
+
+Then call existing tools with `"workspace": "current"`.
+
+Use `save_workspace` only when you explicitly want to persist that runtime workspace to the
+`mcp-config.json` file used at server startup. Runtime registrations disappear when the MCP
+process exits.
 
 ### .NET / C# (dotnet workspaces)
 
