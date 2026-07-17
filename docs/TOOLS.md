@@ -9,7 +9,7 @@ until the workspace changes or `refresh_workspace` is called.
 
 ## The `workspace` parameter
 
-Every tool takes a `workspace` argument. Two forms are accepted:
+Every tool takes a `workspace` argument. Three forms are accepted:
 
 - **A name from `mcp-config.json`** — e.g. `"myapp"`. Use `list_workspaces` to see what is
   configured, including type and whether it is currently loaded.

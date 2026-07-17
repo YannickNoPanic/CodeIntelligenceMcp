@@ -85,14 +85,22 @@ public sealed class WorkspaceManagementTool(
         if (runtime is null)
             return ToolResponses.Err($"workspace '{name}' is not a runtime workspace");
 
-        McpConfig existing = McpConfigLoader.Load(configSource.Path);
-        if (existing.Workspaces.Any(w => string.Equals(w.Name, runtime.Name, StringComparison.OrdinalIgnoreCase)))
-            return ToolResponses.Err($"configured workspace '{runtime.Name}' already exists in '{configSource.Path}'");
+        McpConfig existing;
+        try
+        {
+            existing = LoadConfigForSave(configSource.Path);
+            if (existing.Workspaces.Any(w => string.Equals(w.Name, runtime.Name, StringComparison.OrdinalIgnoreCase)))
+                return ToolResponses.Err($"configured workspace '{runtime.Name}' already exists in '{configSource.Path}'");
 
-        existing.Workspaces.Add(runtime);
+            existing.Workspaces.Add(runtime);
 
-        string json = JsonSerializer.Serialize(existing, ToolResponses.JsonOptions);
-        File.WriteAllText(configSource.Path, json + Environment.NewLine);
+            string json = JsonSerializer.Serialize(existing, ToolResponses.JsonOptions);
+            File.WriteAllText(configSource.Path, json + Environment.NewLine);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
+        {
+            return ToolResponses.Err($"failed to save workspace '{runtime.Name}': {ex.Message}");
+        }
 
         return ToolResponses.Ok(new
         {
@@ -100,6 +108,16 @@ public sealed class WorkspaceManagementTool(
             name = runtime.Name,
             configPath = configSource.Path
         });
+    }
+
+    private static McpConfig LoadConfigForSave(string path)
+    {
+        if (!File.Exists(path))
+            return new McpConfig();
+
+        string json = File.ReadAllText(path);
+        return JsonSerializer.Deserialize<McpConfig>(json, ToolResponses.JsonOptions)
+            ?? throw new JsonException($"mcp-config.json deserialized to null (path: {path})");
     }
 
     private bool IsLoadedFor(WorkspaceConfig w) => w.Type switch

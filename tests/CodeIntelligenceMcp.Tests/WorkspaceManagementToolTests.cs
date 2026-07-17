@@ -154,6 +154,53 @@ public sealed class WorkspaceManagementToolTests : IDisposable
         json.Should().Contain("runtime");
     }
 
+    [Fact]
+    public void SaveWorkspace_InvalidExistingWorkspace_PreservesEntry()
+    {
+        string configPath = Path.Combine(_dir, "mcp-config.json");
+        File.WriteAllText(configPath, """
+            {
+              "workspaces": [
+                {
+                  "name": "offline",
+                  "type": "dotnet",
+                  "solution": "C:/missing/offline.sln"
+                }
+              ]
+            }
+            """);
+        string sln = Path.Combine(_dir, "App.slnx");
+        File.WriteAllText(sln, string.Empty);
+        var catalog = new WorkspaceCatalog(new McpConfig());
+        catalog.Register("current", "dotnet", sln);
+        WorkspaceManagementTool tool = CreateTool(catalog, configSource: new McpConfigSource(configPath));
+
+        string json = tool.SaveWorkspace("current");
+
+        json.Should().Contain("\"saved\":true");
+        string savedJson = File.ReadAllText(configPath);
+        savedJson.Should().Contain("\"name\":\"offline\"");
+        savedJson.Should().Contain("\"solution\":\"C:/missing/offline.sln\"");
+        savedJson.Should().Contain("\"name\":\"current\"");
+    }
+
+    [Fact]
+    public void SaveWorkspace_MalformedConfig_ReturnsError()
+    {
+        string configPath = Path.Combine(_dir, "mcp-config.json");
+        File.WriteAllText(configPath, "{ broken json");
+        string sln = Path.Combine(_dir, "App.slnx");
+        File.WriteAllText(sln, string.Empty);
+        var catalog = new WorkspaceCatalog(new McpConfig());
+        catalog.Register("current", "dotnet", sln);
+        WorkspaceManagementTool tool = CreateTool(catalog, configSource: new McpConfigSource(configPath));
+
+        string json = tool.SaveWorkspace("current");
+
+        json.Should().Contain("\"error\"");
+        json.Should().Contain("failed to save workspace");
+    }
+
     private static WorkspaceManagementTool CreateTool(
         WorkspaceCatalog catalog,
         FakeProvider<RoslynWorkspaceIndex>? roslyn = null,

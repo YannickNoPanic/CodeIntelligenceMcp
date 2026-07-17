@@ -48,7 +48,7 @@ public sealed class WorkspaceCatalog(McpConfig config)
 
         return All()
             .FirstOrDefault(w =>
-                w.Name == workspace
+                string.Equals(w.Name, workspace, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(w.Type, workspaceType, StringComparison.OrdinalIgnoreCase)
                 && getPath(w) is not null);
     }
