@@ -2,7 +2,8 @@
 
 CodeIntelligenceMcp is a .NET MCP server (stdio transport) that gives structured,
 token-efficient access to indexed codebases instead of reading files directly.
-All tools are **read-only**. Workspaces are **lazy-loaded**: the first tool call
+Analysis tools are **read-only**. `save_workspace` is the explicit exception: it persists
+runtime workspace registrations to the startup `mcp-config.json`. Workspaces are **lazy-loaded**: the first tool call
 against a workspace triggers indexing; later calls reuse the in-memory index
 until the workspace changes or `refresh_workspace` is called.
 

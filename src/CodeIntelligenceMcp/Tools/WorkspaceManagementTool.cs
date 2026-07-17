@@ -11,7 +11,7 @@ public sealed class WorkspaceManagementTool(
     McpConfigSource configSource)
 {
     [McpServerTool(Name = "list_workspaces")]
-    [Description("List all configured workspaces with type, path, and whether they are already indexed. Absolute .sln/.slnx paths also work ad hoc on any dotnet tool.")]
+    [Description("List all configured and runtime workspaces with type, path, source, and whether they are already indexed. Absolute .sln/.slnx paths also work ad hoc on any dotnet tool.")]
     public string ListWorkspaces()
     {
         var workspaces = catalog.List().Select(e => new

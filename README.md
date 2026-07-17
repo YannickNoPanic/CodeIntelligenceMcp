@@ -281,7 +281,8 @@ process exits.
 
 ## Notes
 
-- All tools are read-only — the server never modifies files
+- Analysis tools are read-only. `save_workspace` is the explicit exception and only writes
+  runtime workspace registrations to the startup `mcp-config.json`.
 - Workspaces are **lazy-loaded**: indexed on the first tool call per session, not at startup
 - Each stdio session starts a fresh server with its own in-memory cache; use `refresh_workspace` to reload within a session
 - `mcp-config.json` uses absolute paths — no environment variable substitution
