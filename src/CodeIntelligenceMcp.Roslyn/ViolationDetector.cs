@@ -2,6 +2,7 @@ using CodeIntelligenceMcp.Roslyn.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 
 namespace CodeIntelligenceMcp.Roslyn;
 
@@ -17,7 +18,8 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         "inline-viewmodel-razor", "business-logic-in-razor", "json-parsing-in-view", "blazor-injects-infra",
         "missing-cancellation-token", "no-async-void", "async-over-sync",
         "empty-catch", "throw-ex", "too-many-params",
-        "services-in-web", "missing-interface", "direct-instantiation"
+        "services-in-web", "missing-interface", "direct-instantiation",
+        "repository-business-logic", "repository-naming", "comment-too-long"
     ];
 
     public async Task<IReadOnlyList<ViolationResult>> DetectAsync(string rule, CancellationToken ct = default)
@@ -52,6 +54,9 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         "services-in-web" => DetectServicesInWeb(),
         "missing-interface" => DetectMissingInterface(),
         "direct-instantiation" => await DetectDirectInstantiationAsync(ct),
+        "repository-business-logic" => DetectRepositoryBusinessLogic(),
+        "repository-naming" => DetectRepositoryNaming(),
+        "comment-too-long" => await DetectCommentTooLongAsync(ct),
         _ => throw new ArgumentException($"Unknown rule: {rule}", nameof(rule))
     };
 
@@ -903,6 +908,217 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         }
 
         return results;
+    }
+
+    private static readonly string[] RepositoryVerbs = ["Add", "Get", "List", "Update", "Delete"];
+
+    private static readonly string[] RepositoryBusinessMarkers =
+    [
+        "IfNot", "IfExist", "IfMissing", "IfNull", "OrUpdate", "OrCreate", "OrAdd", "OrInsert",
+        "Upsert", "Ensure", "Reconcile", "Merge", "Validate", "Sync"
+    ];
+
+    private static readonly string[] RepositoryBusinessPrefixes = ["Try", "Can"];
+
+    public IReadOnlyList<ViolationResult> DetectRepositoryBusinessLogic()
+    {
+        List<ViolationResult> results = [];
+
+        foreach (var (typeName, filePath, method, baseName) in PublicRepositoryMethods())
+        {
+            string? marker = RepositoryBusinessMarker(baseName);
+            if (marker is null)
+                continue;
+
+            results.Add(new ViolationResult(
+                "repository-business-logic",
+                filePath,
+                SourceLine(method),
+                typeName,
+                method.Name,
+                $"'{typeName}.{method.Name}' contains '{marker}', which encodes a conditional or business decision. " +
+                "Keep repositories to Add/Get/List/Update/Delete and move the decision into the use case."));
+        }
+
+        return results;
+    }
+
+    public IReadOnlyList<ViolationResult> DetectRepositoryNaming()
+    {
+        List<ViolationResult> results = [];
+
+        foreach (var (typeName, filePath, method, baseName) in PublicRepositoryMethods())
+        {
+            if (baseName == "SaveChanges" || RepositoryBusinessMarker(baseName) is not null)
+                continue;
+
+            if (RepositoryVerbs.Any(verb => StartsWithWord(baseName, verb)))
+                continue;
+
+            results.Add(new ViolationResult(
+                "repository-naming",
+                filePath,
+                SourceLine(method),
+                typeName,
+                method.Name,
+                $"'{typeName}.{method.Name}' is not a standard repository verb. Use Add/Get/List/Update/Delete " +
+                "(plus SaveChanges); a more specific operation usually hides business logic that belongs in the use case."));
+        }
+
+        return results;
+    }
+
+    private IEnumerable<(string TypeName, string FilePath, IMethodSymbol Method, string BaseName)> PublicRepositoryMethods()
+    {
+        foreach (var (symbol, projectName, filePath, _) in index.QueryTypes(
+            s => s.TypeKind == TypeKind.Class
+                && s.Name.EndsWith("Repository", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (projectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (filePath.Contains("/obj/", StringComparison.Ordinal)
+                || filePath.Contains("\\obj\\", StringComparison.Ordinal))
+                continue;
+
+            foreach (IMethodSymbol method in symbol.GetMembers().OfType<IMethodSymbol>())
+            {
+                if (method.MethodKind != MethodKind.Ordinary
+                    || method.DeclaredAccessibility != Accessibility.Public)
+                    continue;
+
+                string baseName = method.Name.EndsWith("Async", StringComparison.Ordinal)
+                    ? method.Name[..^"Async".Length]
+                    : method.Name;
+
+                yield return (symbol.Name, filePath, method, baseName);
+            }
+        }
+    }
+
+    // Ordinal so PascalCase word parts match ("Sync") without catching the "sync" inside "Async".
+    private static string? RepositoryBusinessMarker(string baseName) =>
+        RepositoryBusinessMarkers.FirstOrDefault(m => baseName.Contains(m, StringComparison.Ordinal))
+        ?? RepositoryBusinessPrefixes.FirstOrDefault(p => StartsWithWord(baseName, p));
+
+    private static bool StartsWithWord(string name, string word) =>
+        name.StartsWith(word, StringComparison.Ordinal)
+        && (name.Length == word.Length || char.IsUpper(name[word.Length]));
+
+    private static int SourceLine(ISymbol symbol)
+    {
+        Location? location = symbol.Locations.FirstOrDefault(l => l.IsInSource);
+        return location is not null ? location.GetLineSpan().StartLinePosition.Line + 1 : 0;
+    }
+
+    private const int MaxCommentLines = 1;
+
+    public async Task<IReadOnlyList<ViolationResult>> DetectCommentTooLongAsync(CancellationToken ct = default)
+    {
+        List<ViolationResult> results = [];
+
+        foreach (Document doc in index.GetAllDocuments(skipTests: true))
+        {
+            string? filePath = doc.FilePath;
+            if (filePath is null
+                || filePath.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase)
+                || filePath.Contains("/obj/", StringComparison.Ordinal)
+                || filePath.Contains("\\obj\\", StringComparison.Ordinal))
+                continue;
+
+            SyntaxNode? root = await doc.GetSyntaxRootAsync(ct);
+            if (root is null)
+                continue;
+
+            SourceText text = await doc.GetTextAsync(ct);
+            if (text.Lines.Take(5).Any(l => l.ToString().Contains("<auto-generated", StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            foreach (var (startLine, lineCount, isDoc) in FullLineCommentBlocks(root, text))
+            {
+                int length = isDoc ? SummaryLineCount(text, startLine, lineCount) : lineCount;
+                if (length <= MaxCommentLines)
+                    continue;
+
+                string kind = isDoc ? "XML doc summary" : "Comment block";
+                results.Add(new ViolationResult(
+                    "comment-too-long",
+                    filePath,
+                    startLine + 1,
+                    null,
+                    null,
+                    $"{kind} spans {length} lines (limit: {MaxCommentLines}). Keep comments to one line; " +
+                    "longer context belongs in docs or the commit message."));
+            }
+        }
+
+        return results;
+    }
+
+    // Groups consecutive lines that hold nothing but a comment; trivia marks the lines so string contents never count.
+    private static IEnumerable<(int StartLine, int LineCount, bool IsDoc)> FullLineCommentBlocks(SyntaxNode root, SourceText text)
+    {
+        SortedSet<int> commentLines = [];
+        foreach (SyntaxTrivia trivia in root.DescendantTrivia())
+        {
+            if (!trivia.IsKind(SyntaxKind.SingleLineCommentTrivia)
+                && !trivia.IsKind(SyntaxKind.MultiLineCommentTrivia)
+                && !trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)
+                && !trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia))
+                continue;
+
+            int first = text.Lines.GetLineFromPosition(trivia.Span.Start).LineNumber;
+            int last = text.Lines.GetLineFromPosition(Math.Max(trivia.Span.Start, trivia.Span.End - 1)).LineNumber;
+            for (int line = first; line <= last; line++)
+                commentLines.Add(line);
+        }
+
+        int blockStart = -1;
+        int blockLength = 0;
+        bool blockIsDoc = false;
+
+        foreach (int line in commentLines)
+        {
+            string trimmed = text.Lines[line].ToString().TrimStart();
+            bool isFullLine = trimmed.StartsWith("//", StringComparison.Ordinal)
+                || trimmed.StartsWith("/*", StringComparison.Ordinal)
+                || trimmed.StartsWith('*');
+            if (!isFullLine)
+                continue;
+
+            bool isDoc = trimmed.StartsWith("///", StringComparison.Ordinal);
+            if (blockLength > 0 && line == blockStart + blockLength && isDoc == blockIsDoc)
+            {
+                blockLength++;
+                continue;
+            }
+
+            if (blockLength > 0)
+                yield return (blockStart, blockLength, blockIsDoc);
+
+            blockStart = line;
+            blockLength = 1;
+            blockIsDoc = isDoc;
+        }
+
+        if (blockLength > 0)
+            yield return (blockStart, blockLength, blockIsDoc);
+    }
+
+    private static int SummaryLineCount(SourceText text, int startLine, int lineCount)
+    {
+        IEnumerable<string> contentLines = Enumerable.Range(startLine, lineCount)
+            .Select(i => text.Lines[i].ToString().TrimStart().TrimStart('/').Trim());
+
+        string joined = string.Join('\n', contentLines);
+        int open = joined.IndexOf("<summary>", StringComparison.Ordinal);
+        int close = joined.IndexOf("</summary>", StringComparison.Ordinal);
+        if (open < 0 || close < open)
+            return 0;
+
+        return joined[(open + "<summary>".Length)..close]
+            .Split('\n')
+            .Count(l => !string.IsNullOrWhiteSpace(l));
     }
 
     public async Task<IReadOnlyList<ViolationResult>> DetectDirectInstantiationAsync(CancellationToken ct = default)

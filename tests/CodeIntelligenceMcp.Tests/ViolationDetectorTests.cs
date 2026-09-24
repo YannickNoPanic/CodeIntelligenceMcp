@@ -104,6 +104,68 @@ public sealed class ViolationDetectorTests
         violations.Should().ContainSingle().Which.TypeName.Should().Be("CreateOrderUseCase");
     }
 
+    private const string OrderRepositorySource =
+        """
+        namespace App.Infrastructure;
+        public class OrderRepository
+        {
+            public void Add(int order) { }
+            public void GetById(int id) { }
+            public void ListAsync() { }
+            public void UpdateAsync(int order) { }
+            public void Delete(int id) { }
+            public void SaveChangesAsync() { }
+            public void AddIfNotExisting(int order) { }
+            public void InsertIfMissingAsync(int order) { }
+            public void TryAddAsync(int order) { }
+            public void CanCreate(int id) { }
+            public void DisableAsync(int id) { }
+            public void Remove(int id) { }
+            public void GetAsyncSnapshot() { }
+            public void Trying() { }
+        }
+        """;
+
+    [Fact]
+    public async Task DetectAsync_RepositoryBusinessLogic_FlagsConditionalAndDecisionMethodsOnly()
+    {
+        RoslynWorkspaceIndex index = TestIndex.Create(("App.Infrastructure", OrderRepositorySource));
+
+        IReadOnlyList<ViolationResult> violations = await Detector(index).DetectAsync("repository-business-logic", CancellationToken.None);
+
+        violations.Select(v => v.MethodName).Should().BeEquivalentTo(
+            "AddIfNotExisting", "InsertIfMissingAsync", "TryAddAsync", "CanCreate");
+    }
+
+    [Fact]
+    public async Task DetectAsync_RepositoryNaming_FlagsNonStandardVerbsButNotBusinessLogicHits()
+    {
+        RoslynWorkspaceIndex index = TestIndex.Create(("App.Infrastructure", OrderRepositorySource));
+
+        IReadOnlyList<ViolationResult> violations = await Detector(index).DetectAsync("repository-naming", CancellationToken.None);
+
+        violations.Select(v => v.MethodName).Should().BeEquivalentTo("DisableAsync", "Remove", "Trying");
+    }
+
+    [Fact]
+    public async Task DetectAsync_RepositoryRules_SkipTestProjects()
+    {
+        RoslynWorkspaceIndex index = TestIndex.Create(("App.Infrastructure.Tests",
+            """
+            namespace App.Infrastructure.Tests;
+            public class FakeOrderRepository
+            {
+                public void AddIfNotExisting(int order) { }
+                public void DisableAsync(int id) { }
+            }
+            """));
+
+        ViolationDetector detector = Detector(index);
+
+        (await detector.DetectAsync("repository-business-logic", CancellationToken.None)).Should().BeEmpty();
+        (await detector.DetectAsync("repository-naming", CancellationToken.None)).Should().BeEmpty();
+    }
+
     [Fact]
     public async Task DetectAsync_UnknownRule_ThrowsArgumentException()
     {

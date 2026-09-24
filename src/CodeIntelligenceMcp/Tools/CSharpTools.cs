@@ -407,7 +407,7 @@ public sealed class CSharpTools(
     }
 
     [McpServerTool(Name = "find_violations")]
-    [Description("Run a specific architectural rule across the workspace. Rules: core-no-ef, core-no-http, core-no-azure, usecase-not-sealed, inline-viewmodel-razor, business-logic-in-razor, json-parsing-in-view, blazor-injects-infra, controller-not-thin, dto-in-core, missing-cancellation-token, no-async-void, async-over-sync, use-case-not-thin, empty-catch, throw-ex, layer-boundary, too-many-params, services-in-web, missing-interface, direct-instantiation.")]
+    [Description("Run a specific architectural rule across the workspace. Rules: core-no-ef, core-no-http, core-no-azure, usecase-not-sealed, inline-viewmodel-razor, business-logic-in-razor, json-parsing-in-view, blazor-injects-infra, controller-not-thin, dto-in-core, missing-cancellation-token, no-async-void, async-over-sync, use-case-not-thin, empty-catch, throw-ex, layer-boundary, too-many-params, services-in-web, missing-interface, direct-instantiation, repository-business-logic, repository-naming, comment-too-long.")]
     public async Task<string> FindViolations(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx/.slnf for ad-hoc worktrees")] string workspace,
         [Description("Rule key (see tool description for the full list)")] string rule,

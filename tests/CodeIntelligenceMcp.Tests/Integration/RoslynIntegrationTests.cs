@@ -75,6 +75,18 @@ public sealed class RoslynIntegrationTests(MsBuildFixture fixture)
     }
 
     [Fact]
+    public async Task DetectAsync_CommentTooLong_FlagsMultiLineBlocksAndSummariesOnly()
+    {
+        var detector = new ViolationDetector(fixture.Index, MsBuildFixture.CleanArch);
+
+        IReadOnlyList<ViolationResult> violations = await detector.DetectAsync("comment-too-long", CancellationToken.None);
+
+        violations.Where(v => v.FilePath.EndsWith("CommentBait.cs"))
+            .Select(v => v.LineNumber)
+            .Should().BeEquivalentTo([11, 15]);
+    }
+
+    [Fact]
     public async Task DetectAsync_ThrowEx_FlagsStackTraceReset()
     {
         var detector = new ViolationDetector(fixture.Index, MsBuildFixture.CleanArch);
