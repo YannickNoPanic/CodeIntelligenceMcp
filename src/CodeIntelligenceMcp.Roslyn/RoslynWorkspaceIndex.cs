@@ -696,11 +696,13 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
     internal IEnumerable<Document> GetProjectDocuments(string projectName)
     {
-        if (_solution is null)
+        // Exact match: a prefix would let "" claim every project and "App.Core" claim "App.Core.Tests".
+        if (_solution is null || string.IsNullOrEmpty(projectName))
             return [];
 
         return _solution.Projects
-            .Where(p => p.Name.StartsWith(projectName, StringComparison.OrdinalIgnoreCase))
+            .Where(p => string.Equals(NormalizeProjectName(p.Name), projectName, StringComparison.OrdinalIgnoreCase))
+            .DistinctBy(p => p.FilePath ?? p.Name)
             .SelectMany(p => p.Documents);
     }
 

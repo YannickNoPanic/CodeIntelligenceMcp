@@ -125,6 +125,18 @@ public sealed class RoslynIntegrationTests(MsBuildFixture fixture)
         usages.Should().OnlyContain(u => !Path.IsPathRooted(u.FilePath));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("Fixture")]
+    public async Task DetectAsync_CoreRulesWithoutExactCoreProject_ScanNothing(string coreProject)
+    {
+        ViolationDetector detector = new(fixture.Index, new CleanArchitectureNames(coreProject, "", ""));
+
+        IReadOnlyList<ViolationResult> violations = await detector.DetectAsync("core-no-http", CancellationToken.None);
+
+        violations.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task FindUsages_TypeDotMethod_FindsCallSites()
     {
