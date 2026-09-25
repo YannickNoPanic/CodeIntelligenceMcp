@@ -806,6 +806,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         List<IndexedType> useCases = [.. _allTypes.Where(t =>
             !IsTestProject(t.ProjectName)
             && t.Symbol.TypeKind == TypeKind.Class
+            && !t.Symbol.IsRecord
             && !t.Symbol.IsAbstract
             && (t.Symbol.Name.EndsWith("UseCase", StringComparison.Ordinal)
                 || t.Symbol.AllInterfaces.Any(i => i.Name.StartsWith("IUseCase", StringComparison.OrdinalIgnoreCase))))];
@@ -817,9 +818,17 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         List<CoveredUseCase> covered = [];
         List<UncoveredUseCase> uncovered = [];
 
+        ILookup<string, IndexedType> useCasesByName = useCases.ToLookup(t => t.Symbol.Name, StringComparer.Ordinal);
+
         foreach (IndexedType uc in useCases)
         {
-            IndexedType? test = testsByName[uc.Symbol.Name + "Tests"].FirstOrDefault();
+            // Same-named use cases in several namespaces: a test only covers the one whose
+            // project-relative namespace matches (App.Core.Orders <-> App.Tests.Orders).
+            IEnumerable<IndexedType> candidates = testsByName[uc.Symbol.Name + "Tests"];
+            if (useCasesByName[uc.Symbol.Name].Count() > 1)
+                candidates = candidates.Where(t => RelativeNamespace(t) == RelativeNamespace(uc));
+
+            IndexedType? test = candidates.FirstOrDefault();
             if (test is not null)
                 covered.Add(new CoveredUseCase(uc.Symbol.Name, test.Symbol.Name, Rel(test.FilePath)));
             else
@@ -831,6 +840,17 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
         double pct = useCases.Count == 0 ? 0 : Math.Round(100.0 * covered.Count / useCases.Count, 1);
         return new TestCoverageResult(useCases.Count, covered.Count, pct, uncovered, covered);
+    }
+
+    private static string RelativeNamespace(IndexedType type)
+    {
+        string ns = type.Symbol.ContainingNamespace?.ToDisplayString() ?? string.Empty;
+        if (ns.Equals(type.ProjectName, StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+
+        return ns.StartsWith(type.ProjectName + ".", StringComparison.OrdinalIgnoreCase)
+            ? ns[(type.ProjectName.Length + 1)..]
+            : ns;
     }
 
     internal IReadOnlyList<IndexedType> FindIndexedTypes(string typeName)
