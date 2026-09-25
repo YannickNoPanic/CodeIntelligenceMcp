@@ -98,7 +98,7 @@ try
         RegisterServices(builder.Services);
 
         builder.Services
-            .AddMcpServer()
+            .AddMcpServer(options => options.ServerInstructions = ServerInstructions.Text)
             .WithHttpTransport()
             .WithTools<CSharpTools>()
             .WithTools<AspClassicTools>()
@@ -185,7 +185,7 @@ try
         RegisterServices(builder.Services);
 
         builder.Services
-            .AddMcpServer()
+            .AddMcpServer(options => options.ServerInstructions = ServerInstructions.Text)
             .WithStdioServerTransport()
             .WithTools<CSharpTools>()
             .WithTools<AspClassicTools>()
