@@ -18,7 +18,7 @@ Read this file before opening detailed workflow memory. Keep it compact and upda
 
 | ID | Summary | File | Expires | Validation |
 |----|---------|------|---------|------------|
-| | | | | |
+| powershell-violation-rules | Violation rules for powershell workspaces (unapproved verbs, aliases, Invoke-Expression, plaintext passwords, ...) | ideas/active/powershell-violation-rules.md | 2026-12-31 | Tool shape, PSScriptAnalyzer overlap, false-positive rate |
 
 ## Active Learnings
 

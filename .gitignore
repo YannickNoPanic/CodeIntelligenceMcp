@@ -39,3 +39,5 @@ TestResults/
 coverage/
 *.coveragexml
 *.trx
+
+.worktrees/
