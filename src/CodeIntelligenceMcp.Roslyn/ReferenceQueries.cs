@@ -26,7 +26,7 @@ public sealed class ReferenceQueries(RoslynWorkspaceIndex index)
 
         List<ReferencedSymbol> references = [];
         foreach (ISymbol target in targets)
-            references.AddRange(await SymbolFinder.FindReferencesAsync(target, index.Solution, ct));
+            references.AddRange(await SymbolFinder.FindReferencesAsync(target, index.Solution, index.ScopedDocuments, ct));
 
         List<UsageResult> results = [];
         HashSet<(string File, int Start)> seen = [];
@@ -94,7 +94,7 @@ public sealed class ReferenceQueries(RoslynWorkspaceIndex index)
 
             foreach (IMethodSymbol method in frontier)
             {
-                IEnumerable<ReferencedSymbol> refs = await SymbolFinder.FindReferencesAsync(method, index.Solution, ct);
+                IEnumerable<ReferencedSymbol> refs = await SymbolFinder.FindReferencesAsync(method, index.Solution, index.ScopedDocuments, ct);
 
                 foreach (ReferencedSymbol referencedSymbol in refs)
                 {

@@ -21,7 +21,7 @@ public sealed class MsBuildFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        string solutionPath = ResolveFixtureSolution();
+        string solutionPath = ResolveFixtureFile("FixtureSolution.sln");
         _index = await RoslynLoader.LoadAsync(solutionPath, CleanArch);
     }
 
@@ -33,16 +33,16 @@ public sealed class MsBuildFixture : IAsyncLifetime
 
     // CallerFilePath resolves against the source location at compile time, so the fixture
     // is found even when tests run from an isolated output directory outside the repo.
-    private static string ResolveFixtureSolution([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "")
+    internal static string ResolveFixtureFile(string fileName, [System.Runtime.CompilerServices.CallerFilePath] string thisFile = "")
     {
         string testProjectDir = Path.GetDirectoryName(Path.GetDirectoryName(thisFile))
             ?? throw new InvalidOperationException("Could not resolve the test project directory");
 
         string candidate = Path.GetFullPath(Path.Combine(
-            testProjectDir, "..", "fixtures", "FixtureSolution", "FixtureSolution.sln"));
+            testProjectDir, "..", "fixtures", "FixtureSolution", fileName));
 
         return File.Exists(candidate)
             ? candidate
-            : throw new FileNotFoundException($"Fixture solution not found at '{candidate}'");
+            : throw new FileNotFoundException($"Fixture file not found at '{candidate}'");
     }
 }

@@ -28,11 +28,17 @@ public sealed class ChangeAnalyzer(RoslynWorkspaceIndex index, CleanArchitecture
 
         List<ChangedFile> workspaceFiles = [.. allChanges.Where(f =>
         {
-            string fullPath = Path.GetFullPath(Path.Combine(repoRoot, f.FilePath)).Replace('\\', '/');
+            string fullPath = Path.GetFullPath(Path.Combine(repoRoot, f.FilePath));
+
+            // Source files belong by project membership (honours .slnf and projects outside the
+            // solution folder); other files by the solution folder.
+            if (index.ContainsInScope(fullPath) is bool inScope)
+                return inScope;
 
             // Boundary-safe prefix check: "src/Foo" must not swallow files under "src/FooBar".
-            return fullPath.Equals(solutionDir, StringComparison.OrdinalIgnoreCase)
-                || fullPath.StartsWith(solutionDir + "/", StringComparison.OrdinalIgnoreCase);
+            string normalized = fullPath.Replace('\\', '/');
+            return normalized.Equals(solutionDir, StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith(solutionDir + "/", StringComparison.OrdinalIgnoreCase);
         })];
 
         HashSet<string> changedFilePaths = [.. workspaceFiles.Select(f =>

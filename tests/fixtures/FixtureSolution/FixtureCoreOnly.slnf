@@ -1,0 +1,8 @@
+{
+  "solution": {
+    "path": "FixtureSolution.sln",
+    "projects": [
+      "Fixture.Core\\Fixture.Core.csproj"
+    ]
+  }
+}

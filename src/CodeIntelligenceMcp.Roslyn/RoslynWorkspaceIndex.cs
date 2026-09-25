@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using CodeIntelligenceMcp.Roslyn.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -27,6 +28,11 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
     private readonly string? _rootDir;
 
+    // .slnf selection (forward-slash csproj paths). The full solution stays loaded so selected
+    // projects still compile against excluded references; every query scopes to this set.
+    private readonly IReadOnlySet<string>? _projectAllowlist;
+    private IImmutableSet<Document>? _scopedDocuments;
+
     private RoslynWorkspaceIndex(
         MSBuildWorkspace? workspace,
         Solution? solution,
@@ -35,9 +41,11 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         IReadOnlyDictionary<string, IndexedType> typeByFqn,
         ILookup<string, IndexedType> typeBySimpleName,
         IReadOnlyList<string> loadWarnings,
-        string? rootDir)
+        string? rootDir,
+        IReadOnlySet<string>? projectAllowlist = null)
     {
         _rootDir = rootDir;
+        _projectAllowlist = projectAllowlist;
         _workspace = workspace;
         _solution = solution;
         _cleanArch = cleanArch;
@@ -186,8 +194,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
                 continue;
 
             // .slnf filter: only index the selected project subset.
-            if (projectAllowlist is not null
-                && (project.FilePath is null || !projectAllowlist.Contains(project.FilePath.Replace('\\', '/'))))
+            if (!IsSelected(project, projectAllowlist))
                 continue;
 
             Compilation? compilation = await project.GetCompilationAsync(cancellationToken);
@@ -231,7 +238,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
                 : cleanArch;
 
         string? rootDir = solution.FilePath is not null ? Path.GetDirectoryName(solution.FilePath) : null;
-        return new RoslynWorkspaceIndex(workspace, solution, effectiveCleanArch, allTypes, typeByFqn, typeBySimpleName, loadWarnings ?? [], rootDir);
+        return new RoslynWorkspaceIndex(workspace, solution, effectiveCleanArch, allTypes, typeByFqn, typeBySimpleName, loadWarnings ?? [], rootDir, projectAllowlist);
     }
 
     // Partial types have one location per declaration; prefer a hand-written one over
@@ -557,18 +564,19 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         if (_solution is null)
             return new ProjectDependency([], []);
 
-        List<Models.ProjectInfo> projects = [.. _solution.Projects
+        List<Models.ProjectInfo> projects = [.. ScopedProjects
             .Select(p => new Models.ProjectInfo(NormalizeProjectName(p.Name), p.FilePath ?? string.Empty))
             .DistinctBy(p => p.Name)];
 
         HashSet<(string From, string To)> seenEdges = [];
         List<DependencyEdge> edges = [];
-        foreach (Project project in _solution.Projects)
+        foreach (Project project in ScopedProjects)
         {
             foreach (ProjectReference reference in project.ProjectReferences)
             {
                 Project? referenced = _solution.GetProject(reference.ProjectId);
                 if (referenced is not null
+                    && IsSelected(referenced, _projectAllowlist)
                     && seenEdges.Add((NormalizeProjectName(project.Name), NormalizeProjectName(referenced.Name))))
                 {
                     edges.Add(new DependencyEdge(NormalizeProjectName(project.Name), NormalizeProjectName(referenced.Name)));
@@ -658,7 +666,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach (Project project in _solution.Projects)
+        foreach (Project project in ScopedProjects)
         {
             string? projectDir = Path.GetDirectoryName(project.FilePath);
             if (string.IsNullOrEmpty(projectDir) || !Directory.Exists(projectDir))
@@ -681,7 +689,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         if (_solution is null)
             return [];
 
-        IEnumerable<Project> projects = _solution.Projects;
+        IEnumerable<Project> projects = ScopedProjects;
 
         if (skipTests)
             projects = projects.Where(p => !p.Name.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase));
@@ -694,13 +702,40 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         return docs;
     }
 
+    private static bool IsSelected(Project project, IReadOnlySet<string>? allowlist) =>
+        allowlist is null
+        || (project.FilePath is not null && allowlist.Contains(project.FilePath.Replace('\\', '/')));
+
+    internal IEnumerable<Project> ScopedProjects =>
+        _solution?.Projects.Where(p => IsSelected(p, _projectAllowlist)) ?? [];
+
+    // Documents of the selected projects, for SymbolFinder; null means the whole solution.
+    internal IImmutableSet<Document>? ScopedDocuments =>
+        _projectAllowlist is null
+            ? null
+            : _scopedDocuments ??= ScopedProjects.SelectMany(p => p.Documents).ToImmutableHashSet();
+
+    // True when a selected project contains the file, false when only excluded projects do,
+    // null when no project contains it (non-source files).
+    internal bool? ContainsInScope(string absolutePath)
+    {
+        if (_solution is null)
+            return null;
+
+        ImmutableArray<DocumentId> ids = _solution.GetDocumentIdsWithFilePath(absolutePath);
+        if (ids.IsEmpty)
+            return null;
+
+        return ids.Any(id => _solution.GetProject(id.ProjectId) is { } p && IsSelected(p, _projectAllowlist));
+    }
+
     internal IEnumerable<Document> GetProjectDocuments(string projectName)
     {
         // Exact match: a prefix would let "" claim every project and "App.Core" claim "App.Core.Tests".
         if (_solution is null || string.IsNullOrEmpty(projectName))
             return [];
 
-        return _solution.Projects
+        return ScopedProjects
             .Where(p => string.Equals(NormalizeProjectName(p.Name), projectName, StringComparison.OrdinalIgnoreCase))
             .DistinctBy(p => p.FilePath ?? p.Name)
             .SelectMany(p => p.Documents);
@@ -711,7 +746,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         if (_solution is null)
             return [];
 
-        return _solution.Projects
+        return ScopedProjects
             .SelectMany(p => p.Documents)
             .Where(d => d.FilePath?.EndsWith(".razor", StringComparison.OrdinalIgnoreCase) == true);
     }
@@ -721,7 +756,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         if (_solution is null)
             return 0;
 
-        return _solution.Projects
+        return ScopedProjects
             .SelectMany(p => p.Documents)
             .Count(d => d.FilePath?.EndsWith(".razor", StringComparison.OrdinalIgnoreCase) == true);
     }
@@ -900,7 +935,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
         List<DiagnosticResult> results = [];
 
-        IEnumerable<Project> projects = _solution.Projects;
+        IEnumerable<Project> projects = ScopedProjects;
         if (!string.IsNullOrEmpty(projectFilter))
             projects = projects.Where(p => string.Equals(p.Name, projectFilter, StringComparison.OrdinalIgnoreCase));
 
@@ -970,11 +1005,11 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
         ProjectDependencyGraph graph = _solution.GetProjectDependencyGraph();
 
-        Dictionary<ProjectId, string> nameById = _solution.Projects
+        Dictionary<ProjectId, string> nameById = ScopedProjects
             .ToDictionary(p => p.Id, p => NormalizeProjectName(p.Name));
 
         Dictionary<string, HashSet<string>> adjacency = [];
-        foreach (Project project in _solution.Projects)
+        foreach (Project project in ScopedProjects)
         {
             string name = NormalizeProjectName(project.Name);
             if (!adjacency.ContainsKey(name))

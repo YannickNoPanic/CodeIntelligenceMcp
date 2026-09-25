@@ -17,7 +17,7 @@ public sealed class RiskAnalyzer(RoslynWorkspaceIndex index)
             return null;
 
         // 1. Referencing types — how many distinct types reference this one
-        IEnumerable<ReferencedSymbol> refs = await SymbolFinder.FindReferencesAsync(indexed.Symbol, index.Solution, ct);
+        IEnumerable<ReferencedSymbol> refs = await SymbolFinder.FindReferencesAsync(indexed.Symbol, index.Solution, index.ScopedDocuments, ct);
 
         HashSet<string> referencingTypeNames = new(StringComparer.Ordinal);
         foreach (ReferencedSymbol refSym in refs)
