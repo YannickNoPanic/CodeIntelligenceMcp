@@ -116,14 +116,17 @@ public sealed class AspIndex
         return new AspIndex(files, allSql, rootPath);
     }
 
-    public AspFileInfo? GetFile(string filePath)
+    public AspFileInfo? GetFile(string filePath) =>
+        ResolveIndexedPath(filePath) is { } key ? _files[key] : null;
+
+    // Accepts absolute or workspace-relative paths; returns the stored key, or null when not indexed.
+    private string? ResolveIndexedPath(string filePath)
     {
-        if (_files.TryGetValue(filePath, out AspFileInfo? info))
-            return info;
+        if (_files.ContainsKey(filePath))
+            return filePath;
 
         string absolute = Path.GetFullPath(Path.Combine(_rootPath, filePath));
-        _files.TryGetValue(absolute, out info);
-        return info;
+        return _files.ContainsKey(absolute) ? absolute : null;
     }
 
     public IReadOnlyList<(string FilePath, int LineNumber, string Kind, string Context)> FindSymbol(string symbolName)
@@ -266,10 +269,13 @@ public sealed class AspIndex
                 string.Equals(t, tableName, StringComparison.OrdinalIgnoreCase)))];
     }
 
-    public IReadOnlyList<SqlQueryInfo> GetFileQueries(string filePath)
+    public IReadOnlyList<SqlQueryInfo>? GetFileQueries(string filePath)
     {
+        if (ResolveIndexedPath(filePath) is not { } key)
+            return null;
+
         return [.. _allSql
-            .Where(entry => string.Equals(entry.FilePath, filePath, StringComparison.OrdinalIgnoreCase))
+            .Where(entry => string.Equals(entry.FilePath, key, StringComparison.OrdinalIgnoreCase))
             .Select(entry => entry.Query)];
     }
 

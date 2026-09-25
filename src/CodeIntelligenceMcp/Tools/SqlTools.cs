@@ -32,14 +32,17 @@ public sealed class SqlTools(IWorkspaceProvider<AspIndex> aspProvider, Workspace
     [Description("Get all normalised SQL query signatures from a single ASP file. Use to review what queries a file executes.")]
     public async Task<string> SqlGetSignatures(
         [Description("Workspace name (must be an asp-classic workspace)")] string workspace,
-        [Description("File path")] string filePath,
+        [Description("File path, relative to the workspace root or absolute")] string filePath,
         CancellationToken ct = default)
     {
         (AspIndex? index, string? error) = await WorkspaceAccess.GetAsync(aspProvider, catalog, "asp-classic", workspace, ct);
         if (index is null)
             return error!;
 
-        IReadOnlyList<SqlQueryInfo> results = index.GetFileQueries(filePath);
+        IReadOnlyList<SqlQueryInfo>? results = index.GetFileQueries(filePath);
+        if (results is null)
+            return ToolResponses.Err($"file '{filePath}' not found in workspace", "Pass a path relative to the workspace root, or an absolute path.");
+
         return ToolResponses.Ok(results);
     }
 
