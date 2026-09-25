@@ -10,7 +10,7 @@ public sealed class ChangeAnalysisTool(
     [Description("Analyze the git diff between current HEAD and a base branch. Returns changed files with affected types, public API signature changes, architectural violations, and diagnostics scoped to changed code. Use as the first call when reviewing a branch before merge, or after a refactor to check for regressions.")]
     public async Task<string> AnalyzeChanges(
         [Description("Workspace name from mcp-config.json, or an absolute path to a .sln/.slnx/.slnf file for ad-hoc worktrees")] string workspace,
-        [Description("Base branch to compare against. Default 'main'.")] string? baseBranch = "main",
+        [Description("Base branch or commit (sha, HEAD~3) to compare against. Default 'main'.")] string? baseBranch = "main",
         [Description("Include public API signature changes for modified files. Default true.")] bool includeSignatures = true,
         [Description("Include Roslyn diagnostics scoped to changed files. Default true.")] bool includeDiagnostics = true,
         [Description("Also include uncommitted working-tree changes (staged + unstaged). Use before commit to preview the full impact. Default false.")] bool includeUncommitted = false,

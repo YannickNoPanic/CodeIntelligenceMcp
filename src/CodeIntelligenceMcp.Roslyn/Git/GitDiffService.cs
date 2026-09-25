@@ -63,7 +63,7 @@ public static class GitDiffService
 
     public static IReadOnlyList<ChangedFile> GetChangedFiles(string repoPath, string baseBranch)
     {
-        using Repository repo = new(repoPath);
+        using Repository repo = OpenRepository(repoPath);
 
         Commit headCommit = repo.Head.Tip
             ?? throw new InvalidOperationException("Repository has no commits yet");
@@ -79,7 +79,7 @@ public static class GitDiffService
 
     public static IReadOnlyList<ChangedFile> GetChangedFilesIncludingWorkingTree(string repoPath, string baseBranch)
     {
-        using Repository repo = new(repoPath);
+        using Repository repo = OpenRepository(repoPath);
 
         if (repo.Head.Tip is null)
             throw new InvalidOperationException("Repository has no commits yet");
@@ -102,7 +102,7 @@ public static class GitDiffService
 
     public static string? GetFileContentAtBase(string repoPath, string baseBranch, string filePath)
     {
-        using Repository repo = new(repoPath);
+        using Repository repo = OpenRepository(repoPath);
 
         if (repo.Head.Tip is null)
             throw new InvalidOperationException("Repository has no commits yet");
@@ -119,26 +119,69 @@ public static class GitDiffService
 
     private static Commit ResolveFromCommit(Repository repo, string baseBranch)
     {
-        // Fall back through the common default-branch names so repos that never had 'main'
-        // work without the caller passing baseBranch on every call.
-        Branch? branch = repo.Branches[baseBranch]
-            ?? repo.Branches[$"origin/{baseBranch}"]
-            ?? repo.Branches["master"]
-            ?? repo.Branches["origin/master"]
-            ?? repo.Head.TrackedBranch;
+        // Only branch-shaped names fall back to master; an explicit commit (sha, HEAD~3) must resolve or fail.
+        Commit? baseTip = FindBranch(repo, baseBranch)?.Tip
+            ?? FindBranch(repo, $"origin/{baseBranch}")?.Tip
+            ?? FindCommit(repo, baseBranch);
 
-        if (branch is null)
+        if (baseTip is null && Reference.IsValidName($"refs/heads/{baseBranch}"))
+        {
+            baseTip = FindBranch(repo, "master")?.Tip
+                ?? FindBranch(repo, "origin/master")?.Tip
+                ?? repo.Head.TrackedBranch?.Tip;
+        }
+
+        if (baseTip is null)
         {
             string available = string.Join(", ", repo.Branches
                 .Where(b => !b.IsRemote)
                 .Select(b => b.FriendlyName)
                 .Take(10));
             throw new ArgumentException(
-                $"Branch '{baseBranch}' not found in repository — available branches: {available}");
+                $"Branch or commit '{baseBranch}' not found in repository — available branches: {available}");
         }
 
-        Commit? mergeBase = repo.ObjectDatabase.FindMergeBase(branch.Tip, repo.Head.Tip);
-        return mergeBase ?? branch.Tip;
+        Commit? mergeBase = repo.ObjectDatabase.FindMergeBase(baseTip, repo.Head.Tip);
+        return mergeBase ?? baseTip;
+    }
+
+    private static Repository OpenRepository(string repoPath)
+    {
+        try
+        {
+            return new Repository(repoPath);
+        }
+        catch (LibGit2SharpException ex)
+        {
+            string hint = ex.Message.Contains("not owned", StringComparison.OrdinalIgnoreCase)
+                ? $" Mark it safe with: git config --global --add safe.directory \"{repoPath.Replace('\\', '/')}\""
+                : string.Empty;
+            throw new InvalidOperationException($"Cannot open git repository at '{repoPath}': {ex.Message}.{hint}", ex);
+        }
+    }
+
+    private static Branch? FindBranch(Repository repo, string name)
+    {
+        try
+        {
+            return repo.Branches[name];
+        }
+        catch (InvalidSpecificationException)
+        {
+            return null;
+        }
+    }
+
+    private static Commit? FindCommit(Repository repo, string revision)
+    {
+        try
+        {
+            return repo.Lookup<Commit>(revision);
+        }
+        catch (LibGit2SharpException)
+        {
+            return null;
+        }
     }
 
     private static string MapStatus(ChangeKind kind) => kind switch

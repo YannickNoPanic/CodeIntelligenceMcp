@@ -152,7 +152,7 @@ Source: `src/CodeIntelligenceMcp/Tools/CodebaseWikiTool.cs`,
 | Tool | Purpose | Parameters |
 |---|---|---|
 | `get_codebase_wiki` | Compact hierarchical overview of a .NET codebase: project structure, architectural patterns, health summary (violations), optional metrics. Call first in any session. Returns Markdown, not JSON. | `workspace`; `focusArea` (default none) — namespace prefix, e.g. `MyApp.Core.Features.Orders`; `includePatterns` (default `true`); `includeViolations` (default `true`); `includeMetrics` (default `false`) |
-| `analyze_changes` | Git diff analysis between HEAD and a base branch: changed files, affected types, public API signature changes, violations and diagnostics scoped to changed code. | `workspace`; `baseBranch` (default `"main"`); `includeSignatures` (default `true`); `includeDiagnostics` (default `true`); `includeUncommitted` (default `false`) — also include staged + unstaged working-tree changes |
+| `analyze_changes` | Git diff analysis between HEAD and a base branch: changed files, affected types, public API signature changes, violations and diagnostics scoped to changed code. | `workspace`; `baseBranch` (default `"main"`) — branch or commit (sha, `HEAD~3`); `includeSignatures` (default `true`); `includeDiagnostics` (default `true`); `includeUncommitted` (default `false`) — also include staged + unstaged working-tree changes |
 | `get_diagnostics` | Roslyn compiler diagnostics (CS/IDE/CA/SA codes), grouped by diagnostic ID. Does not duplicate `find_violations` architectural rules. | `workspace`; `severity` (default `"warning"`) — `"error"` \| `"warning"` \| `"info"`; `project` (default none) — exact project name; `category` (default none) — code prefix filter |
 
 ---

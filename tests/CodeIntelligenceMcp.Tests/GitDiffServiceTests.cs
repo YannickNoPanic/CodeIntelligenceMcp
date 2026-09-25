@@ -112,4 +112,58 @@ public sealed class GitDiffServiceTests : IDisposable
 
         act.Should().Throw<ArgumentException>().WithMessage("*trunk*");
     }
+
+    [Theory]
+    [InlineData("HEAD~1")]
+    [InlineData("HEAD^")]
+    public void GetChangedFiles_RelativeCommitRef_DiffsAgainstThatCommit(string baseRef)
+    {
+        Repository.Init(_dir);
+        using (Repository repo = new(_dir))
+        {
+            CommitFile(repo, "a.txt");
+            CommitFile(repo, "b.txt");
+        }
+
+        IReadOnlyList<ChangedFile> changed = GitDiffService.GetChangedFiles(_dir, baseRef);
+
+        changed.Should().ContainSingle(f => f.FilePath == "b.txt");
+    }
+
+    [Fact]
+    public void GetChangedFiles_CommitSha_DiffsAgainstThatCommit()
+    {
+        Repository.Init(_dir);
+        string firstSha;
+        using (Repository repo = new(_dir))
+        {
+            CommitFile(repo, "a.txt");
+            firstSha = repo.Head.Tip.Sha[..7];
+            CommitFile(repo, "b.txt");
+        }
+
+        IReadOnlyList<ChangedFile> changed = GitDiffService.GetChangedFiles(_dir, firstSha);
+
+        changed.Should().ContainSingle(f => f.FilePath == "b.txt");
+    }
+
+    [Fact]
+    public void GetChangedFiles_NotARepository_ThrowsInvalidOperationNotLibGit2Exception()
+    {
+        Action act = () => GitDiffService.GetChangedFiles(_dir, "main");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("Cannot open git repository*");
+    }
+
+    [Fact]
+    public void GetChangedFiles_UnresolvableRef_ThrowsArgumentException()
+    {
+        Repository.Init(_dir);
+        using (Repository repo = new(_dir))
+            CommitFile(repo, "a.txt");
+
+        Action act = () => GitDiffService.GetChangedFiles(_dir, "HEAD~99");
+
+        act.Should().Throw<ArgumentException>().WithMessage("*HEAD~99*");
+    }
 }
