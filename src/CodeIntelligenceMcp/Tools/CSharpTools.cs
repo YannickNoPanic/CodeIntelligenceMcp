@@ -275,6 +275,7 @@ public sealed class CSharpTools(
         ViolationDetector detector = new(index, ca);
 
         List<(string Rule, int Count, IReadOnlyList<ViolationResult> Violations)> results = [];
+        List<object> skippedRules = [];
 
         foreach (string rule in ViolationDetector.AllRuleKeys)
         {
@@ -293,16 +294,20 @@ public sealed class CSharpTools(
             {
                 throw;
             }
-            catch
+            catch (Exception ex)
             {
-                // Rule unsupported for this workspace config — skip
+                skippedRules.Add(new { rule, reason = $"{ex.GetType().Name}: {ex.Message}" });
             }
         }
 
-        return ToolResponses.Ok(results
-            .OrderByDescending(r => r.Count)
-            .Select(r => new { rule = r.Rule, count = r.Count, violations = r.Violations })
-            .ToList(), index.IsStaleCached());
+        return ToolResponses.Ok(new
+        {
+            rules = results
+                .OrderByDescending(r => r.Count)
+                .Select(r => new { rule = r.Rule, count = r.Count, violations = r.Violations })
+                .ToList(),
+            skippedRules = skippedRules.Count > 0 ? skippedRules : null
+        }, index.IsStaleCached());
     }
 
     [McpServerTool(Name = "find_dead_code")]

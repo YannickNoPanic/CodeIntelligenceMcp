@@ -191,14 +191,20 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
 
         ViolationDetector detector = new(index, cleanArch);
 
+        // focusArea is a namespace; scope by the files declaring types in it, not by path substring.
+        HashSet<string>? focusFiles = string.IsNullOrEmpty(focusArea)
+            ? null
+            : index.FindTypes(@namespace: focusArea).Select(t => t.FilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         bool anyViolation = false;
+        List<string> skippedRules = [];
         foreach (string rule in ViolationDetector.AllRuleKeys)
         {
             try
             {
                 IReadOnlyList<ViolationResult> violations = await detector.DetectAsync(rule, ct);
-                if (!string.IsNullOrEmpty(focusArea))
-                    violations = [.. violations.Where(v => v.FilePath.Contains(focusArea, StringComparison.OrdinalIgnoreCase))];
+                if (focusFiles is not null)
+                    violations = [.. violations.Where(v => focusFiles.Contains(v.FilePath))];
 
                 if (violations.Count == 0)
                     continue;
@@ -213,23 +219,31 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
             {
                 throw;
             }
-            catch
+            catch (Exception ex)
             {
-                // Rule unsupported for this workspace config — skip
+                skippedRules.Add($"{rule} ({ex.GetType().Name}: {ex.Message})");
             }
         }
 
         if (!anyViolation)
         {
-            sb.AppendLine("No violations detected.");
+            sb.AppendLine(skippedRules.Count == 0 ? "No violations detected." : "No violations detected by the rules that ran.");
+            sb.AppendLine();
+        }
+
+        if (skippedRules.Count > 0)
+        {
+            sb.AppendLine($"**Rules skipped** ({skippedRules.Count}) — results above are incomplete:");
+            foreach (string skipped in skippedRules)
+                sb.AppendLine($"  - {skipped}");
             sb.AppendLine();
         }
 
         // Complexity hotspots
         ComplexityAnalyzer complexityAnalyzer = new(index);
         IReadOnlyList<MethodComplexity> hotspots = await complexityAnalyzer.AnalyzeAsync(minComplexity: 10, ct: ct);
-        if (!string.IsNullOrEmpty(focusArea))
-            hotspots = [.. hotspots.Where(h => h.FilePath.Contains(focusArea, StringComparison.OrdinalIgnoreCase))];
+        if (focusFiles is not null)
+            hotspots = [.. hotspots.Where(h => focusFiles.Contains(h.FilePath))];
 
         if (hotspots.Count > 0)
         {

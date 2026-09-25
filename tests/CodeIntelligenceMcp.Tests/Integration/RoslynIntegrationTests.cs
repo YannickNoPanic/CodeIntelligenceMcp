@@ -125,6 +125,18 @@ public sealed class RoslynIntegrationTests(MsBuildFixture fixture)
         usages.Should().OnlyContain(u => !Path.IsPathRooted(u.FilePath));
     }
 
+    [Fact]
+    public async Task GenerateWiki_FocusAreaNamespace_ReportsViolationsInThatNamespace()
+    {
+        string wiki = await new WikiGenerator(fixture.Index).GenerateAsync(
+            focusArea: "Fixture.Core.Ordering",
+            includePatterns: false,
+            cleanArch: MsBuildFixture.CleanArch);
+
+        wiki.Should().Contain("**empty-catch**: 1 violation");
+        wiki.Should().Contain("SubmitOrder.cs");
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("Fixture")]
