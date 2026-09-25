@@ -30,8 +30,7 @@ public sealed class ChangeAnalyzer(RoslynWorkspaceIndex index, CleanArchitecture
         {
             string fullPath = Path.GetFullPath(Path.Combine(repoRoot, f.FilePath));
 
-            // Source files belong by project membership (honours .slnf and projects outside the
-            // solution folder); other files by the solution folder.
+            // Source files belong by project membership (honours .slnf); other files by solution folder.
             if (index.ContainsInScope(fullPath) is bool inScope)
                 return inScope;
 
@@ -153,7 +152,7 @@ public sealed class ChangeAnalyzer(RoslynWorkspaceIndex index, CleanArchitecture
         return changes;
     }
 
-    private static IEnumerable<SignatureChange> CompareSignatures(string baseSource, string currentSource)
+    internal static IEnumerable<SignatureChange> CompareSignatures(string baseSource, string currentSource)
     {
         Dictionary<string, string> baseSignatures = ExtractMemberSignatures(CSharpSyntaxTree.ParseText(baseSource).GetRoot());
         Dictionary<string, string> currentSignatures = ExtractMemberSignatures(CSharpSyntaxTree.ParseText(currentSource).GetRoot());
@@ -195,8 +194,9 @@ public sealed class ChangeAnalyzer(RoslynWorkspaceIndex index, CleanArchitecture
                 if (!method.Modifiers.Any(m => m.Text == "public"))
                     continue;
 
-                string key = $"{typeName}::{method.Identifier.Text}({method.ParameterList})";
-                result[key] = $"{method.ReturnType} {method.Identifier.Text}({method.ParameterList})";
+                string parameters = CompactParameters(method.ParameterList);
+                string key = $"{typeName}::{method.Identifier.Text}({parameters})";
+                result[key] = $"{Compact(method.ReturnType.ToString())} {method.Identifier.Text}({parameters})";
             }
 
             foreach (PropertyDeclarationSyntax prop in typeDecl.Members.OfType<PropertyDeclarationSyntax>())
@@ -205,12 +205,20 @@ public sealed class ChangeAnalyzer(RoslynWorkspaceIndex index, CleanArchitecture
                     continue;
 
                 string key = $"{typeName}::{prop.Identifier.Text}";
-                result[key] = $"{prop.Type} {prop.Identifier.Text}";
+                result[key] = $"{Compact(prop.Type.ToString())} {prop.Identifier.Text}";
             }
         }
 
         return result;
     }
+
+    // Type, name and default only: attributes, line endings and layout are not part of the API.
+    private static string CompactParameters(ParameterListSyntax parameterList) =>
+        string.Join(", ", parameterList.Parameters.Select(p =>
+            Compact($"{p.Type} {p.Identifier.Text}{(p.Default is null ? "" : $" = {p.Default.Value}")}")));
+
+    private static string Compact(string text) =>
+        string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
     private static (string TypeName, string MemberName) SplitKey(string key)
     {
