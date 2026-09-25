@@ -3,8 +3,7 @@ using Microsoft.CodeAnalysis;
 
 namespace CodeIntelligenceMcp.Roslyn;
 
-// Resolves the name a tool caller passes ("Type", "Type.Member", or a bare member name) to
-// Roslyn symbols, reporting ambiguity and misses instead of silently returning nothing.
+// Resolves "Type", "Type.Member" or a bare member name to symbols; misses and ambiguity are reported, never empty.
 internal static class SymbolTargetResolver
 {
     private const int MaxCandidates = 20;

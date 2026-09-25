@@ -29,8 +29,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
     private readonly string? _rootDir;
 
-    // .slnf selection (forward-slash csproj paths). The full solution stays loaded so selected
-    // projects still compile against excluded references; every query scopes to this set.
+    // .slnf selection; the full solution stays loaded so selected projects compile, queries scope to this.
     private readonly IReadOnlySet<string>? _projectAllowlist;
     private IImmutableSet<Document>? _scopedDocuments;
 
@@ -725,8 +724,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
             ? null
             : _scopedDocuments ??= ScopedProjects.SelectMany(p => p.Documents).ToImmutableHashSet();
 
-    // True when a selected project contains the file, false when only excluded projects do,
-    // null when no project contains it (non-source files).
+    // True: a selected project has the file; false: only excluded projects do; null: no project does.
     internal bool? ContainsInScope(string absolutePath)
     {
         if (_solution is null)
@@ -822,8 +820,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
         foreach (IndexedType uc in useCases)
         {
-            // Same-named use cases in several namespaces: a test only covers the one whose
-            // project-relative namespace matches (App.Core.Orders <-> App.Tests.Orders).
+            // Same-named use cases: match project-relative namespace (App.Core.Orders <-> App.Tests.Orders).
             IEnumerable<IndexedType> candidates = testsByName[uc.Symbol.Name + "Tests"];
             if (useCasesByName[uc.Symbol.Name].Count() > 1)
                 candidates = candidates.Where(t => RelativeNamespace(t) == RelativeNamespace(uc));

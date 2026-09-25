@@ -2,8 +2,7 @@ using Microsoft.CodeAnalysis;
 
 namespace CodeIntelligenceMcp.Roslyn;
 
-// A project is a test project when it references a test framework, or when its last name
-// segment ends in "Test"/"Tests" (App.Tests, App.UnitTests, App.IntegrationTests).
+// Test project = references a test framework, or last name segment ends in Test/Tests (App.UnitTests).
 public static class TestProjectDetector
 {
     private static readonly HashSet<string> TestFrameworkAssemblies = new(StringComparer.OrdinalIgnoreCase)
