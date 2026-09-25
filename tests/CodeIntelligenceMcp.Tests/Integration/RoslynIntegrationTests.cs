@@ -35,6 +35,15 @@ public sealed class RoslynIntegrationTests(MsBuildFixture fixture)
     }
 
     [Fact]
+    public async Task GenerateWiki_FixtureSolution_GroupsTypesUnderTheirProject()
+    {
+        string wiki = await new WikiGenerator(fixture.Index).GenerateAsync(includePatterns: false, includeViolations: false);
+
+        wiki.Should().Contain("### Fixture.Core");
+        wiki.Should().NotContain("### Unknown");
+    }
+
+    [Fact]
     public async Task FindCallers_GreetMethod_FindsWebCaller()
     {
         IReadOnlyList<CallerResult> callers =

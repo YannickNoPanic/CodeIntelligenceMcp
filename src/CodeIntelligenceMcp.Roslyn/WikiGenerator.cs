@@ -18,7 +18,7 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
 
         List<(string Name, string Dir)> projectDirs = projectDep.Projects
             .Where(p => !string.IsNullOrEmpty(p.Path))
-            .Select(p => (p.Name, Dir: Path.GetDirectoryName(p.Path) ?? string.Empty))
+            .Select(p => (p.Name, Dir: index.Rel(Path.GetDirectoryName(p.Path) ?? string.Empty)))
             .Where(p => !string.IsNullOrEmpty(p.Dir))
             .ToList();
 
@@ -287,9 +287,10 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
         foreach ((string name, string dir) in projectDirs)
         {
             string normalizedDir = dir.Replace('\\', '/').TrimEnd('/');
+            bool isRootProject = normalizedDir == ".";
 
             // Boundary-safe prefix check: "src/Foo" must not claim files under "src/FooBar".
-            if (normalizedFile.StartsWith(normalizedDir + "/", StringComparison.OrdinalIgnoreCase)
+            if ((isRootProject || normalizedFile.StartsWith(normalizedDir + "/", StringComparison.OrdinalIgnoreCase))
                 && normalizedDir.Length > bestDir.Length)
             {
                 bestDir = normalizedDir;
