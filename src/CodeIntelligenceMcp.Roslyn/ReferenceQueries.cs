@@ -9,6 +9,12 @@ namespace CodeIntelligenceMcp.Roslyn;
 
 public sealed class ReferenceQueries(RoslynWorkspaceIndex index)
 {
+    public TargetLookup LookupUsageTarget(string symbolName) =>
+        SymbolTargetResolver.ResolveUsageTarget(index, symbolName).Lookup;
+
+    public TargetLookup LookupCallerTarget(string typeName, string methodName) =>
+        SymbolTargetResolver.ResolveCallerTarget(index, typeName, methodName).Lookup;
+
     public async Task<IReadOnlyList<UsageResult>> FindUsagesAsync(
         string symbolName,
         CancellationToken ct = default)
@@ -16,23 +22,22 @@ public sealed class ReferenceQueries(RoslynWorkspaceIndex index)
         if (index.Solution is null)
             return [];
 
-        RoslynWorkspaceIndex.IndexedType? indexed = index.FindIndexedType(symbolName);
-        if (indexed is null)
-            return [];
+        (IReadOnlyList<ISymbol> targets, _) = SymbolTargetResolver.ResolveUsageTarget(index, symbolName);
 
-        IEnumerable<ReferencedSymbol> references = await SymbolFinder.FindReferencesAsync(
-            indexed.Symbol,
-            index.Solution,
-            ct);
+        List<ReferencedSymbol> references = [];
+        foreach (ISymbol target in targets)
+            references.AddRange(await SymbolFinder.FindReferencesAsync(target, index.Solution, ct));
 
         List<UsageResult> results = [];
+        HashSet<(string File, int Start)> seen = [];
 
         foreach (ReferencedSymbol referencedSymbol in references)
         {
             foreach (ReferenceLocation refLocation in referencedSymbol.Locations)
             {
                 Location location = refLocation.Location;
-                if (!location.IsInSource || location.SourceTree is null)
+                if (!location.IsInSource || location.SourceTree is null
+                    || !seen.Add((location.SourceTree.FilePath, location.SourceSpan.Start)))
                     continue;
 
                 FileLinePositionSpan span = location.GetLineSpan();
@@ -75,13 +80,8 @@ public sealed class ReferenceQueries(RoslynWorkspaceIndex index)
         if (index.Solution is null)
             return [];
 
-        RoslynWorkspaceIndex.IndexedType? indexed = index.FindIndexedType(typeName);
-        if (indexed is null)
-            return [];
-
-        List<IMethodSymbol> frontier = [.. indexed.Symbol.GetMembers(methodName)
-            .OfType<IMethodSymbol>()
-            .Where(m => m.MethodKind == MethodKind.Ordinary)];
+        (IReadOnlyList<IMethodSymbol> targets, _) = SymbolTargetResolver.ResolveCallerTarget(index, typeName, methodName);
+        List<IMethodSymbol> frontier = [.. targets];
         if (frontier.Count == 0)
             return [];
 

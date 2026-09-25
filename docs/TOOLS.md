@@ -116,7 +116,7 @@ Source: `src/CodeIntelligenceMcp/Tools/CSharpTools.cs`. All require a `dotnet` w
 | `get_method` | Full source body of a specific method, without opening the file. | `workspace`; `typeName`; `methodName` |
 | `find_implementations` | All concrete types implementing a given interface. | `workspace`; `interfaceName` — simple name or with type args, e.g. `IUseCase<CreateRequest, Result>`; `maxResults` (default 100, 0 = unlimited) |
 | `find_derived_types` | All types deriving from a given base class, at any depth (complements `find_implementations` for interfaces). | `workspace`; `baseTypeName`; `maxResults` (default 100, 0 = unlimited) |
-| `find_usages` | All usages of a type, method, or field across the workspace. | `workspace`; `symbolName`; `maxResults` (default 100, 0 = unlimited) |
+| `find_usages` | All usages of a type, method, or field across the workspace. | `workspace`; `symbolName` — `Type`, `Type.Member`, or a unique bare member name; ambiguous or unknown names return an error with candidates; `maxResults` (default 100, 0 = unlimited) |
 | `get_dependencies` | Constructor-injected dependencies of a type. | `workspace`; `typeName` |
 | `get_public_surface` | All public types in a namespace: interfaces, classes, records, enums. | `workspace`; `namespace` — exact or prefix match |
 | `get_project_dependencies` | Project dependency graph — which projects reference which. | `workspace` |

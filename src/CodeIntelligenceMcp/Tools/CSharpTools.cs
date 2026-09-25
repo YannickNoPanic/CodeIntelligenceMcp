@@ -126,7 +126,7 @@ public sealed class CSharpTools(
     [Description("Find all usages of a type, method, or field across the workspace. Use to understand impact before refactoring.")]
     public async Task<string> FindUsages(
         [Description("Workspace name from mcp-config.json, or absolute path to a .sln/.slnx/.slnf for ad-hoc worktrees")] string workspace,
-        [Description("Symbol name to find usages of")] string symbolName,
+        [Description("A type name ('OrderService'), 'Type.Member' ('OrderService.Place'), or a bare member name when it is unique. Ambiguous or unknown names return an error with candidates.")] string symbolName,
         [Description("Maximum results to return (default 100, 0 = unlimited)")] int maxResults = 100,
         CancellationToken ct = default)
     {
@@ -137,7 +137,11 @@ public sealed class CSharpTools(
         if (AmbiguityError(index, symbolName) is string ambiguous)
             return ambiguous;
 
-        IReadOnlyList<UsageResult> results = await new ReferenceQueries(index).FindUsagesAsync(symbolName, ct);
+        ReferenceQueries queries = new(index);
+        if (queries.LookupUsageTarget(symbolName) is { Found: false } miss)
+            return ToolResponses.Err(miss.Error!, miss.Hint, miss.Candidates);
+
+        IReadOnlyList<UsageResult> results = await queries.FindUsagesAsync(symbolName, ct);
         return ToolResponses.OkList(results, maxResults, index.IsStaleCached());
     }
 
@@ -334,7 +338,11 @@ public sealed class CSharpTools(
         if (AmbiguityError(index, typeName) is string ambiguous)
             return ambiguous;
 
-        IReadOnlyList<CallerResult> results = await new ReferenceQueries(index)
+        ReferenceQueries queries = new(index);
+        if (queries.LookupCallerTarget(typeName, methodName) is { Found: false } miss)
+            return ToolResponses.Err(miss.Error!, miss.Hint, miss.Candidates);
+
+        IReadOnlyList<CallerResult> results = await queries
             .FindCallersAsync(typeName, methodName, Math.Clamp(depth, 1, 3), ct);
         return ToolResponses.OkList(results, maxResults, index.IsStaleCached());
     }

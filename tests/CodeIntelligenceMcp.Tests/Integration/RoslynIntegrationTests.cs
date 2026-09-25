@@ -126,6 +126,66 @@ public sealed class RoslynIntegrationTests(MsBuildFixture fixture)
     }
 
     [Fact]
+    public async Task FindUsages_TypeDotMethod_FindsCallSites()
+    {
+        IReadOnlyList<UsageResult> usages =
+            await new ReferenceQueries(fixture.Index).FindUsagesAsync("GreetUseCase.Greet", CancellationToken.None);
+
+        usages.Should().Contain(u => u.FilePath == "Fixture.Web/Caller.cs");
+    }
+
+    [Fact]
+    public void LookupUsageTarget_MemberOnTwoTypes_ReportsAmbiguousCandidates()
+    {
+        TargetLookup lookup = new ReferenceQueries(fixture.Index).LookupUsageTarget("Greet");
+
+        lookup.Found.Should().BeFalse();
+        lookup.Candidates.Should().Contain(["Fixture.Core.GreetUseCase.Greet", "Fixture.Core.IGreetUseCase.Greet"]);
+    }
+
+    [Fact]
+    public async Task FindUsages_UniqueBareMemberName_ResolvesToOwningType()
+    {
+        IReadOnlyList<UsageResult> usages =
+            await new ReferenceQueries(fixture.Index).FindUsagesAsync("InvokeConcrete", CancellationToken.None);
+
+        usages.Should().Contain(u => u.FilePath == "Fixture.Web/Outer.cs");
+    }
+
+    [Fact]
+    public void LookupUsageTarget_UnknownSymbol_ReportsNotFound()
+    {
+        TargetLookup lookup = new ReferenceQueries(fixture.Index).LookupUsageTarget("DoesNotExist");
+
+        lookup.Found.Should().BeFalse();
+        lookup.Error.Should().Contain("not found");
+    }
+
+    [Fact]
+    public void LookupCallerTarget_UnknownMethod_ListsMethodsOnType()
+    {
+        TargetLookup lookup = new ReferenceQueries(fixture.Index).LookupCallerTarget("GreetUseCase", "Gret");
+
+        lookup.Found.Should().BeFalse();
+        lookup.Candidates.Should().Contain("Greet");
+    }
+
+    [Fact]
+    public void LookupCallerTarget_UnknownType_ReportsNotFound()
+    {
+        TargetLookup lookup = new ReferenceQueries(fixture.Index).LookupCallerTarget("NoSuchType", "Greet");
+
+        lookup.Found.Should().BeFalse();
+        lookup.Error.Should().Contain("NoSuchType");
+    }
+
+    [Fact]
+    public void LookupCallerTarget_ExistingMethod_IsFound()
+    {
+        new ReferenceQueries(fixture.Index).LookupCallerTarget("GreetUseCase", "Greet").Found.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task AnalyzeAsync_ComplexMethod_ScoresFiveAndSimpleScoresOne()
     {
         var analyzer = new ComplexityAnalyzer(fixture.Index);
