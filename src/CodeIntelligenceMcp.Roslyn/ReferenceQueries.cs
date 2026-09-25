@@ -189,7 +189,7 @@ public sealed class ReferenceQueries(RoslynWorkspaceIndex index)
         {
             INamedTypeSymbol symbol = indexed.Symbol;
 
-            if (indexed.ProjectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+            if (index.IsTestProject(indexed.ProjectName))
                 continue;
 
             if (projectFilter is not null

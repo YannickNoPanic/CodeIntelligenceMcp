@@ -24,6 +24,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         int LineStart);
 
     private readonly Lazy<HashSet<string>> _testClassNames;
+    private readonly Lazy<HashSet<string>> _testProjects;
     private readonly Lazy<Task<IReadOnlyList<ProjectMethodComplexity>>> _allComplexity;
 
     private readonly string? _rootDir;
@@ -54,9 +55,15 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         _typeBySimpleName = typeBySimpleName;
         _loadWarnings = loadWarnings;
 
+        _testProjects = new Lazy<HashSet<string>>(() => _allTypes
+            .GroupBy(t => t.ProjectName, StringComparer.OrdinalIgnoreCase)
+            .Where(g => TestProjectDetector.IsTestProject(g.Key, g.First().Compilation))
+            .Select(g => g.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase));
+
         _testClassNames = new Lazy<HashSet<string>>(() => new HashSet<string>(
             _allTypes
-                .Where(t => t.ProjectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+                .Where(t => IsTestProject(t.ProjectName))
                 .Select(t => t.Symbol.Name),
             StringComparer.Ordinal));
 
@@ -66,6 +73,9 @@ public sealed class RoslynWorkspaceIndex : IDisposable
     }
 
     public int TypeCount => _allTypes.Count;
+
+    public bool IsTestProject(string projectName) =>
+        _testProjects.Value.Contains(projectName) || TestProjectDetector.IsTestProject(projectName, null);
     public CleanArchitectureNames CleanArchitecture => _cleanArch;
     public IReadOnlyList<string> LoadWarnings => _loadWarnings;
 
@@ -692,7 +702,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
         IEnumerable<Project> projects = ScopedProjects;
 
         if (skipTests)
-            projects = projects.Where(p => !p.Name.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase));
+            projects = projects.Where(p => !IsTestProject(NormalizeProjectName(p.Name)));
 
         IEnumerable<Document> docs = projects.SelectMany(p => p.Documents);
 
@@ -794,14 +804,14 @@ public sealed class RoslynWorkspaceIndex : IDisposable
     public TestCoverageResult GetTestCoverage()
     {
         List<IndexedType> useCases = [.. _allTypes.Where(t =>
-            !t.ProjectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase)
+            !IsTestProject(t.ProjectName)
             && t.Symbol.TypeKind == TypeKind.Class
             && !t.Symbol.IsAbstract
             && (t.Symbol.Name.EndsWith("UseCase", StringComparison.Ordinal)
                 || t.Symbol.AllInterfaces.Any(i => i.Name.StartsWith("IUseCase", StringComparison.OrdinalIgnoreCase))))];
 
         ILookup<string, IndexedType> testsByName = _allTypes
-            .Where(t => t.ProjectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+            .Where(t => IsTestProject(t.ProjectName))
             .ToLookup(t => t.Symbol.Name, StringComparer.Ordinal);
 
         List<CoveredUseCase> covered = [];

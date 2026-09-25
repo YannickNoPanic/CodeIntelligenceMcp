@@ -391,7 +391,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
 
         foreach (var (symbol, projectName, filePath, _) in index.QueryTypes())
         {
-            if (projectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+            if (index.IsTestProject(projectName))
                 continue;
 
             if (symbol.TypeKind == TypeKind.Interface)
@@ -431,7 +431,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
 
         foreach (var (symbol, projectName, filePath, _) in index.QueryTypes())
         {
-            if (projectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+            if (index.IsTestProject(projectName))
                 continue;
 
             foreach (IMethodSymbol method in symbol.GetMembers().OfType<IMethodSymbol>())
@@ -473,7 +473,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
                 && !s.IsAbstract
                 && s.AllInterfaces.Any(i => i.Name.StartsWith("IUseCase", StringComparison.OrdinalIgnoreCase))))
         {
-            if (projectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+            if (index.IsTestProject(projectName))
                 continue;
 
             bool found = false;
@@ -675,7 +675,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
 
         foreach (var (symbol, projectName, filePath, _) in index.QueryTypes())
         {
-            if (projectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+            if (index.IsTestProject(projectName))
                 continue;
 
             foreach (IMethodSymbol method in symbol.GetMembers().OfType<IMethodSymbol>())
@@ -725,7 +725,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
         foreach (DependencyEdge edge in deps.Dependencies)
         {
             // Skip test projects — they reference what they test by design
-            if (edge.From.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+            if (index.IsTestProject(edge.From))
                 continue;
 
             bool fromIsCore = string.Equals(edge.From, cleanArch.CoreProject, StringComparison.OrdinalIgnoreCase);
@@ -882,7 +882,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
             if (filePath.Contains("/obj/", StringComparison.Ordinal)
                 || filePath.Contains("\\obj\\", StringComparison.Ordinal))
                 continue;
-            if (projectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+            if (index.IsTestProject(projectName))
                 continue;
 
             if (symbol.IsAbstract)
@@ -974,7 +974,7 @@ public sealed class ViolationDetector(RoslynWorkspaceIndex index, CleanArchitect
             s => s.TypeKind == TypeKind.Class
                 && s.Name.EndsWith("Repository", StringComparison.OrdinalIgnoreCase)))
         {
-            if (projectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+            if (index.IsTestProject(projectName))
                 continue;
 
             if (filePath.Contains("/obj/", StringComparison.Ordinal)

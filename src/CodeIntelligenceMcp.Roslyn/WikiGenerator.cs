@@ -254,7 +254,7 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
         }
     }
 
-    private static void AppendMetrics(
+    private void AppendMetrics(
         StringBuilder sb,
         IReadOnlyList<TypeSummary> types,
         ProjectDependency projectDep)
@@ -283,7 +283,7 @@ public sealed class WikiGenerator(RoslynWorkspaceIndex index)
         sb.AppendLine();
 
         int testProjects = projectDep.Projects
-            .Count(p => p.Name.Contains("Test", StringComparison.OrdinalIgnoreCase));
+            .Count(p => index.IsTestProject(p.Name));
 
         if (testProjects > 0)
         {

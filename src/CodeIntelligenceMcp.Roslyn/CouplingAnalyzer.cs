@@ -11,7 +11,7 @@ public sealed class CouplingAnalyzer(RoslynWorkspaceIndex index)
 
         foreach (RoslynWorkspaceIndex.IndexedType indexed in index.AllTypes)
         {
-            if (indexed.ProjectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+            if (index.IsTestProject(indexed.ProjectName))
                 continue;
 
             if (projectFilter is not null

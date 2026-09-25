@@ -112,7 +112,7 @@ public sealed class RiskAnalyzer(RoslynWorkspaceIndex index)
         {
             ct.ThrowIfCancellationRequested();
 
-            if (indexed.ProjectName.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))
+            if (index.IsTestProject(indexed.ProjectName))
                 continue;
             if (indexed.FilePath.Contains("/obj/", StringComparison.Ordinal)
                 || indexed.FilePath.Contains("\\obj\\", StringComparison.Ordinal))
