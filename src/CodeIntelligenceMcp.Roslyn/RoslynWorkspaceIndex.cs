@@ -31,7 +31,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
 
     // .slnf selection; the full solution stays loaded so selected projects compile, queries scope to this.
     private readonly IReadOnlySet<string>? _projectAllowlist;
-    private IImmutableSet<Document>? _scopedDocuments;
+    private readonly Lazy<IImmutableSet<Document>> _scopedDocuments;
 
     private RoslynWorkspaceIndex(
         MSBuildWorkspace? workspace,
@@ -46,6 +46,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
     {
         _rootDir = rootDir;
         _projectAllowlist = projectAllowlist;
+        _scopedDocuments = new Lazy<IImmutableSet<Document>>(() => ScopedProjects.SelectMany(p => p.Documents).ToImmutableHashSet());
         _workspace = workspace;
         _solution = solution;
         _cleanArch = cleanArch;
@@ -722,7 +723,7 @@ public sealed class RoslynWorkspaceIndex : IDisposable
     internal IImmutableSet<Document>? ScopedDocuments =>
         _projectAllowlist is null
             ? null
-            : _scopedDocuments ??= ScopedProjects.SelectMany(p => p.Documents).ToImmutableHashSet();
+            : _scopedDocuments.Value;
 
     // True: a selected project has the file; false: only excluded projects do; null: no project does.
     internal bool? ContainsInScope(string absolutePath)
